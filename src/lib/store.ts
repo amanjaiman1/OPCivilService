@@ -149,6 +149,14 @@ interface ChronicleState extends ChronicleData {
   /** Nearly solid surfaces and no blur, in either theme. Synced. */
   reduceTransparency: boolean;
   _hasHydrated: boolean;
+  /**
+   * Which cloud version this device's copy descends from, for which account.
+   * Device-only and never synced. It is saved in the same storage entry as
+   * the data, so the two can never be cleared or restored separately: a copy
+   * without it (a wiped or rebuilt store) is never mistaken for the student's
+   * edits on top of the last synced copy. See `lib/sync/engine.ts`.
+   */
+  _sync: SyncStamp | null;
 
   /**
    * The `sleepDayKey` for which the daily sleep/wake prompt has already been
@@ -169,8 +177,11 @@ interface ChronicleState extends ChronicleData {
   setReduceTransparency: (v: boolean) => void;
   /** Back to an empty account that hasn't been set up. */
   resetData: () => void;
-  /** Replace all synced data with a snapshot pulled from the cloud. */
-  applyCloudSnapshot: (snap: Partial<CloudSnapshot>) => void;
+  /**
+   * Replace all synced data with a snapshot pulled from the cloud. With
+   * `stamp`, records in the same write which cloud version it descends from.
+   */
+  applyCloudSnapshot: (snap: Partial<CloudSnapshot> | null, stamp?: SyncStamp) => void;
   updateProfile: (patch: Partial<ChronicleData["profile"]>) => void;
   /**
    * Finishes first-run setup: the syllabus, books and habits are built for
@@ -498,6 +509,27 @@ export const SNAPSHOT_KEYS = [
 
 export type CloudSnapshot = Pick<ChronicleState, (typeof SNAPSHOT_KEYS)[number]>;
 
+/** See `ChronicleState._sync`. */
+export interface SyncStamp {
+  accountId: string;
+  version: number;
+  at: string;
+}
+
+/**
+ * The persisted store's version, which is also the snapshot schema sent with
+ * every save: the server refuses a save from a lower schema once a higher one
+ * has written the account, so an old cached app can't overwrite newer data.
+ * Bump it whenever the shape of synced data changes.
+ */
+export const STORE_VERSION = 17;
+
+let hydrationFailed = false;
+/** Whether the last rehydration from storage failed (unreadable or a migration threw). */
+export function lastHydrationFailed(): boolean {
+  return hydrationFailed;
+}
+
 const MISTAKE_INTERVALS = [1, 3, 7, 16, 35];
 
 const STATUS_CONF: Record<TopicStatus, number> = {
@@ -573,6 +605,7 @@ export const useChronicle = create<ChronicleState>()(
       themeMode: DEFAULT_THEME_MODE,
       reduceTransparency: false,
       _hasHydrated: false,
+      _sync: null,
       lastSleepPrompt: undefined,
       notify: DEFAULT_NOTIFY_SETTINGS,
       notifyState: EMPTY_NOTIFY_STATE,
@@ -594,8 +627,9 @@ export const useChronicle = create<ChronicleState>()(
         set({ reduceTransparency: v });
       },
       resetData: () => set({ ...createBlankAccount() }),
-      applyCloudSnapshot: (snap) =>
+      applyCloudSnapshot: (snap, stamp) =>
         set(() => {
+          if (!snap) return stamp ? { _sync: stamp } : {};
           const normalized = normalizeSnapshot(snap);
           const next: Record<string, unknown> = {};
           for (const k of SNAPSHOT_KEYS) {
@@ -612,6 +646,7 @@ export const useChronicle = create<ChronicleState>()(
             writeAppearance("transparency", reduceTransparency ? "reduced" : "auto");
             applyTransparency(reduceTransparency);
           }
+          if (stamp) next._sync = stamp;
           return next as Partial<ChronicleState>;
         }),
       updateProfile: (patch) =>
@@ -1939,7 +1974,7 @@ export const useChronicle = create<ChronicleState>()(
     }),
     {
       name: STORE_KEY,
-      version: 17,
+      version: STORE_VERSION,
       /**
        * Scoped to the signed-in account: `upsc-chronicle-store:<user id>`.
        * Nothing is read or written until an account is activated, which is why
@@ -2035,7 +2070,10 @@ export const useChronicle = create<ChronicleState>()(
         void setHasHydrated;
         return rest as ChronicleState;
       },
-      onRehydrateStorage: () => (state) => {
+      onRehydrateStorage: () => {
+        hydrationFailed = false;
+        return (state, error) => {
+        if (error) hydrationFailed = true;
         state?.setHasHydrated(true);
         /**
          * Normalise the notification slice after hydration. Stored settings from
@@ -2068,6 +2106,7 @@ export const useChronicle = create<ChronicleState>()(
           writeAppearance("theme", mode);
           writeAppearance("transparency", reduced ? "reduced" : "auto");
         }
+        };
       },
     },
   ),
@@ -2102,5 +2141,6 @@ export function blankChronicleState(): Partial<ChronicleState> {
     notifyState: EMPTY_NOTIFY_STATE,
     notifyLog: EMPTY_DELIVERY_LOG,
     _hasHydrated: false,
+    _sync: null,
   };
 }

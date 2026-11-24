@@ -116,3 +116,99 @@ test("two accounts on one browser never see each other's data, in memory or on d
   assert.ok(onDisk.includes("2026-11-11") && !onDisk.includes("2026-11-10"), "bob's saved copy holds only bob's day");
   deactivateAccount();
 });
+
+/* ── how far a browser's copy is trusted when an account opens ── */
+
+import { readSafetyCopies } from "@/lib/account/session";
+import { chronicleStoreAdapter } from "@/lib/sync/store-adapter";
+
+const stampAs = (accountId: string, version: number) =>
+  useChronicle.getState().applyCloudSnapshot(null, { accountId, version, at: "2026-11-21T07:00:00Z" });
+
+test("a fresh browser's copy is pristine and unverified: it must wait for the cloud", async () => {
+  const a = await activateAccount("alice", "cloud");
+  assert.equal(a.pristine, true);
+  assert.equal(a.verified, false);
+  deactivateAccount();
+});
+
+test("a copy stamped by a sync opens verified, before the network answers", async () => {
+  await activateAccount("alice", "cloud");
+  useChronicle.getState().completeOnboarding({ ...defaultSetup(), name: "Alice" });
+  stampAs("alice", 12);
+  deactivateAccount();
+  const again = await activateAccount("alice", "cloud");
+  assert.equal(again.verified, true);
+  assert.equal(again.pristine, false);
+  assert.equal(chronicleStoreAdapter("alice").readStamp(), 12);
+  deactivateAccount();
+});
+
+test("the stamp lives in the same entry as the data: wiping one wipes the other", async () => {
+  await activateAccount("alice", "cloud");
+  useChronicle.getState().completeOnboarding({ ...defaultSetup(), name: "Alice" });
+  stampAs("alice", 12);
+  deactivateAccount();
+  assert.ok((disk.getItem("upsc-chronicle-store:alice") ?? "").includes('"_sync"'));
+  disk.removeItem("upsc-chronicle-store:alice"); // site data cleared
+  const after = await activateAccount("alice", "cloud");
+  assert.equal(after.verified, false, "nothing on the device can vouch for itself any more");
+  assert.equal(after.pristine, true);
+  deactivateAccount();
+});
+
+test("an unreadable stored copy is set aside, never overwritten, and the account waits for the cloud", async () => {
+  disk.setItem("upsc-chronicle-store:alice", "{not json");
+  const a = await activateAccount("alice", "cloud");
+  assert.equal(a.quarantined, true);
+  assert.equal(a.verified, false);
+  assert.equal(readSafetyCopies("alice")[0]?.raw, "{not json", "the damaged copy is kept");
+  assert.equal(disk.getItem("upsc-chronicle-store:alice"), "{not json", "and not written over by the blank");
+  assert.equal(useChronicle.getState()._hasHydrated, true, "pages still render, once the cloud copy arrives");
+  deactivateAccount();
+});
+
+test("a copy carrying another account's stamp is set aside and never used", async () => {
+  await activateAccount("alice", "cloud");
+  useChronicle.getState().completeOnboarding({ ...defaultSetup(), name: "Alice" });
+  useChronicle.getState().upsertJournal(entry("2026-11-10", 6));
+  stampAs("alice", 4);
+  deactivateAccount();
+  disk.setItem("upsc-chronicle-store:bob", disk.getItem("upsc-chronicle-store:alice") as string);
+
+  const b = await activateAccount("bob", "cloud");
+  assert.equal(b.quarantined, true);
+  assert.equal(b.verified, false);
+  assert.equal(useChronicle.getState().journal.length, 0, "none of alice's data is loaded for bob");
+  assert.equal(chronicleStoreAdapter("bob").readStamp(), null);
+  deactivateAccount();
+});
+
+test("a device from before stamps, with its storage intact, still opens at once", async () => {
+  await activateAccount("alice", "cloud");
+  useChronicle.getState().completeOnboarding({ ...defaultSetup(), name: "Alice" });
+  deactivateAccount();
+  disk.setItem("upsc-chronicle-ready:alice", "1");
+  const a = await activateAccount("alice", "cloud");
+  assert.equal(a.trustUnstampedBase, true);
+  assert.equal(a.verified, true);
+  deactivateAccount();
+});
+
+test("H: an account's unsynced changes stay with that account across a switch", async () => {
+  await activateAccount("alice", "cloud");
+  useChronicle.getState().completeOnboarding({ ...defaultSetup(), name: "Alice" });
+  stampAs("alice", 3);
+  useChronicle.getState().upsertJournal(entry("2026-11-12", 2)); // not yet synced
+  deactivateAccount();
+
+  await activateAccount("bob", "cloud");
+  assert.equal(chronicleStoreAdapter("bob").readStamp(), null, "bob has no synced copy of his own");
+  assert.equal(useChronicle.getState().journal.length, 0, "and none of alice's pending day");
+  deactivateAccount();
+
+  await activateAccount("alice", "cloud");
+  assert.deepEqual(useChronicle.getState().journal.map((e: Entry) => e.date), ["2026-11-12"], "alice's pending day waited for her");
+  assert.equal(chronicleStoreAdapter("alice").readStamp(), 3);
+  deactivateAccount();
+});

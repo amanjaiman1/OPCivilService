@@ -351,16 +351,51 @@ export function useServiceWorker() {
 
   const applyUpdate = useCallback(() => {
     if (!waiting) return;
-    // Reload once the new worker takes over.
-    const onControllerChange = () => window.location.reload();
-    navigator.serviceWorker.addEventListener(
-      "controllerchange",
-      onControllerChange,
-      { once: true },
-    );
-    waiting.postMessage({ type: "SKIP_WAITING" });
+    const worker = waiting;
     setWaiting(null);
+    // Give the signed-in account a moment to push what it has (it is saved on
+    // this device either way, and the new version picks it up from there).
+    void settleBeforeUpdate().then(() => {
+      // Reload once the new worker takes over.
+      const onControllerChange = () => window.location.reload();
+      navigator.serviceWorker.addEventListener("controllerchange", onControllerChange, { once: true });
+      worker.postMessage({ type: "SKIP_WAITING" });
+    });
   }, [waiting]);
 
   return { updateReady: Boolean(waiting), applyUpdate, offline };
+}
+
+/* ── before an update reloads the app ───────────────────────────
+   The account session registers a last save here. An update never clears
+   anything stored on the device (the worker only manages its own caches),
+   so this is about getting changes to the cloud sooner, not about keeping
+   them: waiting is bounded, and the reload goes ahead regardless. */
+
+let beforeUpdate: (() => Promise<unknown>) | null = null;
+const BEFORE_UPDATE_WAIT_MS = 2_500;
+
+export function registerBeforeUpdate(fn: () => Promise<unknown>): () => void {
+  beforeUpdate = fn;
+  return () => {
+    if (beforeUpdate === fn) beforeUpdate = null;
+  };
+}
+
+function settleBeforeUpdate(): Promise<void> {
+  const fn = beforeUpdate;
+  if (!fn) return Promise.resolve();
+  return new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, BEFORE_UPDATE_WAIT_MS);
+    fn().then(
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+    );
+  });
 }

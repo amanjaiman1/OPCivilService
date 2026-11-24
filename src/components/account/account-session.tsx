@@ -10,15 +10,22 @@ import {
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
-import { CloudOff, RefreshCw } from "lucide-react";
 import { useAuth, type AccountUser } from "@/components/auth/auth-provider";
-import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
-import { SyncEngine, type SyncState } from "@/lib/sync/engine";
-import { createSupabaseTransport } from "@/lib/sync/supabase-transport";
+import { STORE_VERSION, readCloudSnapshot } from "@/lib/store";
+import { SyncEngine, type Snapshot, type SyncState } from "@/lib/sync/engine";
+import { createSupabaseTransport, reportSyncEvent } from "@/lib/sync/supabase-transport";
 import { createBaseStore } from "@/lib/sync/base-store";
 import { chronicleStoreAdapter } from "@/lib/sync/store-adapter";
-import { startCoordinator, type Coordinator, type SyncRole } from "@/lib/sync/coordinator";
+import { deviceLabel } from "@/lib/sync/device";
+import { isBlankSnapshot } from "@/lib/sync/integrity";
+import { registerBeforeUpdate } from "@/lib/pwa";
+import {
+  startCoordinator,
+  type Coordinator,
+  type SyncAction,
+  type SyncRole,
+} from "@/lib/sync/coordinator";
 import { settleLegacyClaim } from "@/lib/account/legacy";
 import { releasePushSubscription } from "@/lib/push";
 import { forgetRole } from "@/lib/platform/my-role";
@@ -28,8 +35,9 @@ import {
   activateAccount,
   clearConflicts,
   deactivateAccount,
+  discardSafetyCopies,
   eraseAccountFromDevice,
-  isDeviceReady,
+  keepSafetyCopy,
   markDeviceReady,
   readConflicts,
   recordConflicts,
@@ -39,14 +47,26 @@ import {
   type ConflictRecord,
   type StoredAccountMode,
 } from "@/lib/account/session";
-import { BootScreen, StatusScreen } from "./boot-screen";
+import { BootScreen } from "./boot-screen";
+import { OutdatedScreen, RecoveryScreen, SyncGuard, UnverifiedScreen } from "./sync-safety";
 
 /* ════════════════════════════════════════════════════════════════
    THE SIGNED-IN SESSION
    Mounted once per account (keyed by its id), so switching accounts
    unmounts every page, form and cache of the previous one. It loads the
    account's data into the store, runs cloud sync for it, and owns
-   signing out. Nothing renders until the right account's data is loaded.
+   signing out.
+
+   The hydration gate: nothing renders, and nothing can be edited, until
+   it is settled which copy is the account's.
+     - A copy this browser can prove came from the cloud (its sync stamp)
+       opens at once, and keeps working offline.
+     - Anything else (a fresh, wiped or unreadable browser) waits for the
+       cloud. If the cloud can't be reached, the app says so and offers to
+       try again: a failed request is never taken for an empty account.
+     - If the cloud can't say which copy is the account's (recovery) or the
+       account was saved by a newer app (outdated), a screen says so and
+       nothing is written until the student chooses.
    ════════════════════════════════════════════════════════════════ */
 
 export interface SyncView extends SyncState {
@@ -63,6 +83,8 @@ export interface AccountContextValue {
   mode: AccountMode;
   user: AccountUser | null;
   syncNow: () => void;
+  /** Carries out a decision about sync (try again, a held save, recovery) in the tab that syncs. */
+  act: (action: SyncAction) => void;
   /** Pushes pending changes; true when everything is in the cloud. */
   flush: (timeoutMs?: number) => Promise<boolean>;
   /**
@@ -123,12 +145,15 @@ export const IDLE: SyncView = {
   lastSyncedAt: null,
   error: null,
   errorKind: null,
+  hold: null,
+  recovery: null,
+  baseVersion: null,
   role: "local",
 };
 
 const REMOTE_CHECK_MS = 3 * 60_000;
 
-type Phase = "loading" | "ready" | "unavailable" | "leaving";
+type Phase = "loading" | "ready" | "unavailable" | "recovery" | "outdated" | "leaving";
 
 export function AccountSession({
   accountId,
@@ -173,31 +198,49 @@ export function AccountSession({
       }
       const client = supabase;
 
-      // Usable without waiting for the network when this browser already holds
-      // the account's data. A fresh browser waits for the first download.
-      const hasLocalData = isDeviceReady(accountId) || !activation.pristine;
+      // Usable without waiting for the network only when this browser's copy
+      // is verified as the account's. Anything else waits for the cloud.
+      const canOpenNow = activation.verified;
+      if (activation.quarantined) reportSyncEvent(client, "local_quarantined", deviceLabel(), null);
 
       coord = startCoordinator({
         accountId,
         createEngine: (onState) =>
           new SyncEngine({
-            transport: createSupabaseTransport(client, accountId),
-            store: chronicleStoreAdapter(),
+            transport: createSupabaseTransport(client, accountId, { schema: STORE_VERSION, device: deviceLabel }),
+            store: chronicleStoreAdapter(accountId),
             baseStore: createBaseStore(accountId),
             pristine: activation.pristine,
+            trustUnstampedBase: activation.trustUnstampedBase,
+            schema: STORE_VERSION,
             legacy: activation.legacy,
             onState,
             onConflicts: (found) => setConflicts(recordConflicts(accountId, found)),
+            onRemoteRemoval: (summary, before) =>
+              keepSafetyCopy(accountId, { reason: "before_cloud_removal", data: before, summary }),
             onLegacySettled: () => settleLegacyClaim(accountId),
           }),
         onState: (state) => {
           if (cancelled) return;
           setSync((prev) => ({ ...state, role: prev.role }));
-          if (state.lastSyncedAt) {
+          if (state.status === "recovery") {
+            setPhase((p) => (p === "leaving" ? p : "recovery"));
+          } else if (state.status === "outdated") {
+            setPhase((p) => (p === "loading" || p === "unavailable" ? "outdated" : p));
+          } else if (state.lastSyncedAt) {
             markDeviceReady(accountId);
-            setPhase((p) => (p === "loading" || p === "unavailable" ? "ready" : p));
+            // Out of recovery only once the cloud copy is agreed, not while a
+            // choice made on the recovery screen is still being carried out.
+            setPhase((p) =>
+              p === "loading" || p === "unavailable" || (p === "recovery" && state.status === "synced") ? "ready" : p,
+            );
           } else if (state.status === "offline" || state.status === "error") {
-            setPhase((p) => (p === "loading" ? (hasLocalData ? "ready" : "unavailable") : p));
+            setPhase((p) => {
+              if (p !== "loading") return p;
+              if (canOpenNow) return "ready";
+              reportSyncEvent(client, "hydrate_failed", deviceLabel(), null, { kind: state.errorKind });
+              return "unavailable";
+            });
           }
         },
         onRole: (role) => {
@@ -206,7 +249,9 @@ export function AccountSession({
         },
       });
       coordinator.current = coord;
-      if (hasLocalData) setPhase("ready");
+      if (canOpenNow) setPhase("ready");
+      // An app update first gives pending changes a moment to reach the cloud.
+      cleanups.push(registerBeforeUpdate(() => coord?.flush(2_000) ?? Promise.resolve(false)));
 
       // The moment another device saves this account, look (a live update; the
       // version says when it's this device's own save). A suspension or deletion
@@ -319,6 +364,7 @@ export function AccountSession({
     coordinator.current = null;
     deactivateAccount();
     await eraseAccountFromDevice(accountId);
+    discardSafetyCopies(accountId);
     await auth.signOut();
   }, [accountId, auth]);
 
@@ -327,10 +373,11 @@ export function AccountSession({
     setConflicts([]);
   }, [accountId]);
   const syncNow = useCallback(() => coordinator.current?.syncNow(), []);
+  const act = useCallback((action: SyncAction) => coordinator.current?.act(action), []);
 
   const value = useMemo<AccountContextValue>(
-    () => ({ accountId, mode, user, syncNow, flush, signOut, endAfterDeletion, dismissConflicts }),
-    [accountId, mode, user, syncNow, flush, signOut, endAfterDeletion, dismissConflicts],
+    () => ({ accountId, mode, user, syncNow, act, flush, signOut, endAfterDeletion, dismissConflicts }),
+    [accountId, mode, user, syncNow, act, flush, signOut, endAfterDeletion, dismissConflicts],
   );
   const status = useMemo<SyncStatusValue>(() => ({ sync, conflicts }), [sync, conflicts]);
 
@@ -338,32 +385,34 @@ export function AccountSession({
   if (phase === "loading") return <BootScreen label="Loading your chronicle…" />;
   if (phase === "unavailable") {
     return (
-      <StatusScreen
-        icon={CloudOff}
-        title="Can't load your chronicle yet"
-        body={
-          <>
-            This browser doesn&apos;t have a copy of your data, and the cloud can&apos;t be
-            reached right now.
-            {sync.error && <span className="mt-2 block text-paper/45">{sync.error}</span>}
-          </>
-        }
-      >
-        <Button onClick={() => coordinator.current?.syncNow()}>
-          <RefreshCw className="h-4 w-4" /> Try again
-        </Button>
-        {mode === "cloud" && (
-          <Button variant="ghost" onClick={() => void auth.signOut()}>
-            Sign out
-          </Button>
-        )}
-      </StatusScreen>
+      <UnverifiedScreen
+        error={sync.error}
+        onRetry={() => act({ kind: "retry" })}
+        onSignOut={mode === "cloud" ? () => void auth.signOut() : undefined}
+      />
     );
   }
+  if (phase === "outdated") return <OutdatedScreen />;
 
   return (
     <AccountContext.Provider value={value}>
-      <SyncStatusContext.Provider value={status}>{children}</SyncStatusContext.Provider>
+      <SyncStatusContext.Provider value={status}>
+        {phase === "recovery" ? (
+          <RecoveryScreen
+            reason={sync.recovery ?? "unrecognised"}
+            error={sync.error}
+            deviceHasData={!isBlankSnapshot(readCloudSnapshot() as unknown as Snapshot)}
+            onRetry={() => act({ kind: "retry" })}
+            onInitialise={(intent) => act({ kind: "initialise", intent })}
+            onSignOut={() => void signOut()}
+          />
+        ) : (
+          <>
+            {children}
+            <SyncGuard />
+          </>
+        )}
+      </SyncStatusContext.Provider>
     </AccountContext.Provider>
   );
 }

@@ -424,9 +424,20 @@ async function handleAuth(req, res, url) {
   return authError(res, 404, "not_found", `no mock for ${req.method} ${path}`);
 }
 
-const COLUMNS = new Set(["data", "version", "updated_at", "user_id"]);
+const COLUMNS = new Set(["data", "version", "updated_at", "user_id", "schema_version", "last_device"]);
 const columnSql = (c) =>
   c === "version" ? "version::int as version" : c === "updated_at" ? "to_json(updated_at) #>> '{}' as updated_at" : c;
+
+/**
+ * Read-only tables the app lists from (Settings → Data, the recovery screen):
+ * `select`, `id=eq.N`, `order=id.desc` and `limit`, as the caller, under RLS.
+ */
+const READ_TABLES = {
+  "/chronicle_state_history": new Set(["id", "version", "reason", "created_at", "counts", "bytes", "data"]),
+  "/chronicle_sync_events": new Set(["id", "event", "device", "version", "detail", "created_at"]),
+};
+const readColumnSql = (c) =>
+  c === "id" || c === "version" ? `${c}::int as ${c}` : c === "created_at" ? "to_json(created_at) #>> '{}' as created_at" : c;
 
 async function handleRest(req, res, url) {
   const claims = bearerClaims(req) ?? { role: "anon" };
@@ -447,6 +458,20 @@ async function handleRest(req, res, url) {
       const args = req.method === "POST" ? await body(req) : Object.fromEntries(url.searchParams);
       const out = await callFunction(claims, rpc[1], args ?? {});
       return send(res, out.status, out.body);
+    }
+    if (READ_TABLES[path] && req.method === "GET") {
+      const allowed = READ_TABLES[path];
+      const cols = (url.searchParams.get("select") ?? "").split(",").filter((c) => allowed.has(c));
+      const id = url.searchParams.get("id")?.replace(/^eq\./, "");
+      const limit = Math.min(100, Number(url.searchParams.get("limit") ?? 100) || 100);
+      const rows = await asCaller(claims, () =>
+        db.query(
+          `select ${(cols.length ? cols : ["id"]).map(readColumnSql).join(", ")} from public.${path.slice(1)}${id ? " where id = $1" : ""} order by id desc limit ${limit}`,
+          id ? [Number(id)] : [],
+        ),
+      );
+      const single = (req.headers.accept ?? "").includes("vnd.pgrst.object");
+      return send(res, 200, single ? (rows.rows[0] ?? null) : rows.rows);
     }
     if (path === "/chronicle_state") {
       const filter = url.searchParams.get("user_id")?.replace(/^eq\./, "");
@@ -805,6 +830,15 @@ const server = createServer(async (req, res) => {
         ),
       );
       return send(res, 200, r.rows[0] ?? null);
+    }
+    if (url.pathname === "/__mock/events") {
+      const r = await asAdmin(() =>
+        db.query(
+          "select e.event, e.version::int as version, e.device, e.detail from public.chronicle_sync_events e join auth.users u on u.id = e.user_id where u.email = $1 order by e.id",
+          [String(url.searchParams.get("email") ?? "").toLowerCase()],
+        ),
+      );
+      return send(res, 200, r.rows);
     }
     if (url.pathname === "/__mock/rows") {
       const r = await asAdmin(() => db.query("select u.email, s.version::int as version, octet_length(s.data::text)::int as bytes from public.chronicle_state s join auth.users u on u.id = s.user_id order by u.email"));

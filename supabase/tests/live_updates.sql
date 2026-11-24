@@ -192,8 +192,10 @@ select public.test_live_take();
 -- Synced data: every save, to that account only, with its version.
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"1d000000-0000-4000-8000-000000000004","role":"authenticated"}', true);
-select public.save_chronicle_state('{"journal":[]}'::jsonb, 0);
-select public.save_chronicle_state('{"journal":[],"habits":[]}'::jsonb, 1);
+-- (The account is 60 days old, so its first snapshot must be a set-up one:
+-- an old account offering only an empty template is sent to recovery.)
+select public.save_chronicle_state('{"profile":{"onboardedAt":"2026-10-01"},"journal":[]}'::jsonb, 0);
+select public.save_chronicle_state('{"profile":{"onboardedAt":"2026-10-01"},"journal":[],"habits":[]}'::jsonb, 1);
 reset role;
 select public.test_live_expect('two saves', array[
   'account:1d000000-0000-4000-8000-000000000004: chronicle v1',
@@ -331,7 +333,7 @@ values ('1d000000-0000-4000-8000-000000000004', 'general', 'Still saved when Rea
 insert into auth.users (id, email) values ('1f000000-0000-4000-8000-000000000007', 'still-signs-up@live-check.invalid');
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"1d000000-0000-4000-8000-000000000004","role":"authenticated"}', true);
-select public.save_chronicle_state('{"journal":[],"habits":[],"goals":[]}'::jsonb, 2);
+select public.save_chronicle_state('{"profile":{"onboardedAt":"2026-10-01"},"journal":[],"habits":[],"goals":[]}'::jsonb, 2);
 reset role;
 do $$
 begin

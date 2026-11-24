@@ -14,8 +14,10 @@
    and nothing of the previous account is left in memory.
    ════════════════════════════════════════════════════════════════ */
 
-import { useChronicle, blankChronicleState } from "../store";
+import { useChronicle, blankChronicleState, lastHydrationFailed, readCloudSnapshot } from "../store";
 import type { MergeConflict } from "../sync/merge";
+import type { Snapshot } from "../sync/engine";
+import { assessLocalCopy, isBlankSnapshot, type LossSummary } from "../sync/integrity";
 import { clearBaseStore } from "../sync/base-store";
 import { DEFAULT_THEME_MODE, applyThemeMode, applyTransparency } from "../theme";
 import {
@@ -44,10 +46,25 @@ export interface Activation {
   /** Pre-account data moved into this account on this load, if any. */
   legacy: LegacyClaim | null;
   /**
-   * True when this browser holds nothing of the account worth keeping: it has
-   * never completed a sync here and inherited no old data.
+   * True when this browser holds nothing of the account worth keeping: a
+   * blank copy that can't show it came from the cloud, and no old data.
    */
   pristine: boolean;
+  /**
+   * True when this browser's copy is known to descend from a cloud version of
+   * this account (its stamp says so), so it can be opened, and edited, before
+   * the network answers or without it. A fresh, wiped or unreadable copy is
+   * not: it waits for the cloud.
+   */
+  verified: boolean;
+  /**
+   * A device from before stamps existed, with its storage intact: it has
+   * completed a sync here and its copy was read cleanly, so its synced copy
+   * is trusted once and the stamp written from it.
+   */
+  trustUnstampedBase: boolean;
+  /** The stored copy couldn't be used (unreadable, or another account's) and was set aside. */
+  quarantined: boolean;
 }
 
 const readyKey = (id: string) => `upsc-chronicle-ready:${id}`;
@@ -59,14 +76,38 @@ export async function activateAccount(accountId: string, mode: StoredAccountMode
 
   const legacy = claimLegacyData(accountId, mode);
   deleteRetiredWallpaperPhotos();
-  const pristine =
-    mode === "cloud" ? readKey(readyKey(accountId)) !== "1" && !legacy : false;
+  const ready = readKey(readyKey(accountId)) === "1";
+  const raw = readKey(storeKeyFor(accountId));
 
   setActiveAccount(accountId);
   useChronicle.setState(blankChronicleState());
   enableWrites();
   await useChronicle.persist.rehydrate();
-  return { accountId, legacy, pristine };
+
+  // A stored copy that can't be used is set aside before anything can write
+  // over it, and the account opens blank, to be filled from the cloud. The
+  // blank itself is not written to disk.
+  let quarantined = false;
+  const setAside = (reason: SafetyCopy["reason"]) => {
+    if (raw != null) keepSafetyCopy(accountId, { reason, raw });
+    withoutWrites(() => useChronicle.setState({ ...blankChronicleState(), _hasHydrated: true }));
+    quarantined = true;
+  };
+  if (lastHydrationFailed()) setAside("unreadable");
+  else if (useChronicle.getState()._sync && useChronicle.getState()._sync?.accountId !== accountId) setAside("foreign");
+
+  const stamp = useChronicle.getState()._sync;
+  const trust = assessLocalCopy({
+    cloud: mode === "cloud",
+    stampOk: Boolean(stamp && stamp.accountId === accountId && stamp.version > 0),
+    hasStamp: Boolean(stamp),
+    blank: isBlankSnapshot(readCloudSnapshot() as unknown as Snapshot),
+    legacy: Boolean(legacy),
+    ready,
+    hadStore: raw != null,
+    quarantined,
+  });
+  return { accountId, legacy, quarantined, ...trust };
 }
 
 export function deactivateAccount(): void {
@@ -116,6 +157,51 @@ export async function eraseAccountFromDevice(accountId: string): Promise<void> {
   eraseAccountKeys(accountId);
   eraseLegacyMarker(accountId);
   await clearBaseStore(accountId);
+}
+
+/* ── safety copies kept on this device ──────────────────────────
+   Kept when this device's copy is about to be replaced in a way that could
+   lose something the cloud may not have: a stored copy that couldn't be read
+   (or carried another account's stamp), and this device's copy just before a
+   change from the cloud removed a large share of it. At most two, newest
+   first, under the account's own key. Unlike the account's other keys they
+   are kept at sign-out (they may be the only copy) and removed when the
+   account is deleted or the student discards them (Settings → Data). */
+
+export interface SafetyCopy {
+  reason: "unreadable" | "foreign" | "before_cloud_removal";
+  at?: string;
+  /** The stored entry as it was, for copies that couldn't be read. */
+  raw?: string;
+  /** This device's synced data, for copies taken before a removal. */
+  data?: Snapshot;
+  summary?: LossSummary;
+}
+
+const safetyKey = (id: string) => `upsc-chronicle-safety:${id}`;
+const MAX_SAFETY_COPIES = 2;
+
+export function readSafetyCopies(accountId: string): SafetyCopy[] {
+  try {
+    const parsed: unknown = JSON.parse(readKey(safetyKey(accountId)) ?? "[]");
+    return Array.isArray(parsed) ? (parsed as SafetyCopy[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function keepSafetyCopy(accountId: string, copy: SafetyCopy): boolean {
+  const entry = { ...copy, at: copy.at ?? new Date().toISOString() };
+  const list = [entry, ...readSafetyCopies(accountId)].slice(0, MAX_SAFETY_COPIES);
+  // Fall back to fewer copies when storage is nearly full.
+  for (let n = list.length; n > 0; n--) {
+    if (writeKey(safetyKey(accountId), JSON.stringify(list.slice(0, n)))) return true;
+  }
+  return false;
+}
+
+export function discardSafetyCopies(accountId: string): void {
+  removeKey(safetyKey(accountId));
 }
 
 /* ── the record of edits that clashed between devices ──────────── */

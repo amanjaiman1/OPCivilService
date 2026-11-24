@@ -631,20 +631,35 @@ async function main() {
       await page.getByRole("radio", { name: /^Dark/ }).click();
       await waitFor("Dark in A's cloud copy", async () => (await cloudOf(A.email))?.data?.themeMode === "dark");
 
-      // A device still on an older version saves Blue Glass, with a colour
-      // palette and Liquid Glass. Retried if this device saved in between.
+      // A device still on an older version can no longer save over data this
+      // version wrote: the server refuses, and that device is asked to reload.
       const { access_token } = await sessionOf(page);
-      await waitFor("the older device's save", async () => {
+      const headers = { apikey: mockEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY, Authorization: `Bearer ${access_token}`, "Content-Type": "application/json" };
+      const stale = await cloudOf(A.email);
+      const refused = await fetch(`${MOCK}/rest/v1/rpc/save_chronicle_state`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ p_data: { ...stale.data, themeMode: "blue" }, p_base_version: stale.version }),
+      });
+      const refusal = await refused.json();
+      check(refused.status === 400 && refusal.code === "23514" && /newer version/.test(refusal.message), "an older app version saved over newer data");
+      check((await cloudOf(A.email)).version === stale.version, "the refused save changed the cloud");
+
+      // But a snapshot written before the upgrade can still carry Blue Glass,
+      // a colour palette and Liquid Glass. Retried if this device saved in between.
+      await waitFor("the snapshot with retired choices", async () => {
         const now = await cloudOf(A.email);
-        const res = await fetch(`${MOCK}/rest/v1/rpc/save_chronicle_state`, {
+        const res = await fetch(`${MOCK}/rest/v1/rpc/chronicle_save`, {
           method: "POST",
-          headers: { apikey: mockEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY, Authorization: `Bearer ${access_token}`, "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify({
             p_data: { ...now.data, themeMode: "blue", palette: "lagoon", material: "glass" },
             p_base_version: now.version,
+            p_schema: 17,
+            p_device: "e2e-older-snapshot",
           }),
         });
-        return (await res.json())?.[0]?.saved === true;
+        return (await res.json())?.[0]?.status === "saved";
       });
 
       // Here it opens as Light, and the retired choices never reach the page.
@@ -1012,6 +1027,122 @@ async function main() {
       const p = await (await browser.newContext()).newPage();
       await p.goto(`${APP}/reset-password#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired`);
       await p.getByText("This link has expired or was already used. Request a new one.").waitFor();
+    });
+
+    /* ── sync safety: the incident, and the protections around it ── */
+    const D = { name: "Student Four", email: "student.four@example.com" };
+    const eventsOf = (email) => mock(`/__mock/events?email=${encodeURIComponent(email)}`);
+    const settle = () => new Promise((r) => setTimeout(r, 4_000)); // past the 2 s save debounce
+
+    await scenario("19. The incident: a browser whose storage was wiped gets the account back, and writes nothing over it", async () => {
+      const ctx = await browser.newContext();
+      const p = await ctx.newPage();
+      await signUp(p, D.name, D.email);
+      await onboard(p, D.name);
+      await passSleepPromptIfShown(p);
+      await passTourIfShown(p);
+      await dashboardGreets(p, "Student");
+      await writeJournal(p, "D-month highlight");
+      await p.goto(`${APP}/settings#appearance`);
+      await p.getByRole("radio", { name: /^Dark/ }).click();
+      const before = await waitFor("D's data in the cloud", async () => {
+        const c = await cloudOf(D.email);
+        return c && JSON.stringify(c.data).includes("D-month highlight") && c.data.themeMode === "dark" ? c : null;
+      });
+      await settle();
+      const v0 = (await cloudOf(D.email)).version;
+      check(v0 >= before.version, "the cloud version moved backwards");
+
+      // "Remove stored data" took localStorage (the store, its stamp, the session),
+      // but the IndexedDB copy of the last sync survived.
+      await p.evaluate(() => localStorage.clear());
+      const synced = await p.evaluate(
+        () =>
+          new Promise((resolve) => {
+            const req = indexedDB.open("upsc-chronicle-sync");
+            req.onsuccess = () => {
+              const tx = req.result.transaction("bases", "readonly");
+              const all = tx.objectStore("bases").getAllKeys();
+              all.onsuccess = () => resolve(all.result.length);
+            };
+            req.onerror = () => resolve(0);
+          }),
+      );
+      check(synced === 1, "the synced copy should still be in IndexedDB for this replay");
+      await p.goto(`${APP}/dashboard`);
+      await signIn(p, D.email);
+      await passSleepPromptIfShown(p);
+      await passTourIfShown(p);
+      await dashboardGreets(p, "Student"); // not first-run setup: the account came back
+      check((await htmlAttr(p, "data-surface")) === "black", "the student's theme came back, not the default");
+      await settle();
+      const after = await cloudOf(D.email);
+      check(after.version === v0, `the wiped browser wrote to the cloud (v${v0} → v${after.version})`);
+      check(JSON.stringify(after.data).includes("D-month highlight"), "the cloud lost D's journal");
+      const events = await waitFor("the mismatch in D's trail", async () => {
+        const e = await eventsOf(D.email);
+        return e.some((x) => x.event === "client:stamp_mismatch") ? e : null;
+      });
+      check(!events.some((x) => x.event === "save_held"), "nothing even tried to replace the data");
+      await ctx.close();
+    });
+
+    await scenario("20. A new browser with the cloud unreachable creates nothing, keeps editing closed, and loads on retry", async () => {
+      const ctx = await browser.newContext();
+      const p = await ctx.newPage();
+      const v0 = (await cloudOf(D.email)).version;
+      const inits = async () => (await eventsOf(D.email)).filter((x) => x.event.startsWith("init")).length;
+      const initsBefore = await inits(); // D's genuine first snapshot, from sign-up
+      await ctx.route("**/rest/v1/chronicle_state*", (route) => route.abort());
+      await signIn(p, D.email);
+      await p.getByText("We couldn't verify your cloud data").waitFor();
+      await p.getByText("Your account has not been reset.").waitFor();
+      check((await p.getByText("What should we call you?").count()) === 0, "first-run setup must not open");
+      await settle();
+      check((await cloudOf(D.email)).version === v0, "a failed download led to a write");
+      check((await inits()) === initsBefore, "a failed download was taken for a new account");
+
+      await ctx.unroute("**/rest/v1/chronicle_state*");
+      await p.getByRole("button", { name: "Try again" }).click();
+      await passSleepPromptIfShown(p);
+      await passTourIfShown(p);
+      await dashboardGreets(p, "Student");
+      await settle();
+      const c = await cloudOf(D.email);
+      check(c.version === v0 && JSON.stringify(c.data).includes("D-month highlight"), "the original snapshot loaded untouched");
+      await ctx.close();
+    });
+
+    await scenario("21. Restoring an empty backup is held; the cloud is untouched and the data comes back", async () => {
+      const ctx = await browser.newContext();
+      const p = await ctx.newPage();
+      await signIn(p, D.email);
+      await passSleepPromptIfShown(p);
+      await passTourIfShown(p);
+      await dashboardGreets(p, "Student");
+      const v0 = (await cloudOf(D.email)).version;
+      await p.goto(`${APP}/settings#data`);
+      await p.getByTestId("recovery-panel").waitFor();
+      await p.locator('input[type="file"][accept*="json"]').setInputFiles({
+        name: "empty.json",
+        mimeType: "application/json",
+        buffer: Buffer.from(JSON.stringify({ data: { profile: { name: "" }, journal: [], lifeLog: [], goals: [] } })),
+      });
+      await p.getByRole("button", { name: "Restore backup" }).click();
+      const held = p.getByRole("dialog", { name: "Your cloud data is protected" });
+      await held.waitFor({ timeout: 20_000 });
+      check((await cloudOf(D.email)).version === v0, "the held save changed the cloud");
+      check((await eventsOf(D.email)).some((x) => x.event === "save_held"), "the held save isn't in D's trail");
+
+      await held.getByRole("button", { name: "Bring my data back" }).click();
+      await held.waitFor({ state: "detached", timeout: 20_000 });
+      await p.goto(`${APP}/dashboard`);
+      await dashboardGreets(p, "Student");
+      await settle();
+      const c = await cloudOf(D.email);
+      check(JSON.stringify(c.data).includes("D-month highlight"), "D's journal didn't survive");
+      check(Boolean(c.data.profile.onboardedAt), "D's setup was undone");
+      await ctx.close();
     });
 
     console.log(`\nAll ${passed} scenarios passed.`);

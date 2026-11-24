@@ -1,4 +1,13 @@
-import { Check, CloudOff, FlaskConical, HardDrive, RefreshCw, TriangleAlert, type LucideIcon } from "lucide-react";
+import {
+  Check,
+  CloudOff,
+  FlaskConical,
+  HardDrive,
+  RefreshCw,
+  ShieldCheck,
+  TriangleAlert,
+  type LucideIcon,
+} from "lucide-react";
 import type { AccountMode } from "@/lib/account/session";
 import type { SyncView } from "./account-session";
 
@@ -37,12 +46,38 @@ export function describeSync(sync: SyncView, mode: AccountMode): SyncLabel {
       tone: "muted",
     };
   }
+  if (sync.status === "held") {
+    return {
+      label: "Needs your decision",
+      detail: "A change on this device would remove much of your data. Your cloud data is protected until you choose.",
+      icon: ShieldCheck,
+      tone: "warn",
+    };
+  }
+  if (sync.status === "recovery") {
+    return {
+      label: "Recovery needed",
+      detail: "We couldn't safely load your account. No new snapshot has been created.",
+      icon: ShieldCheck,
+      tone: "warn",
+    };
+  }
+  if (sync.status === "outdated") {
+    return {
+      label: "Update needed",
+      detail: sync.pending
+        ? "Saved on this device, not yet in the cloud. A newer version of the app saved your data: reload to keep syncing."
+        : "A newer version of the app saved your data. Reload to keep syncing.",
+      icon: TriangleAlert,
+      tone: "warn",
+    };
+  }
   if (sync.status === "offline") {
     return {
       label: "Offline",
       detail: sync.pending
-        ? "Your changes are saved on this device and will sync when you're back online."
-        : "Everything is saved. Sync resumes when you're back online.",
+        ? "Saved on this device, not yet in the cloud. Keep this browser's data until it syncs; it will when you're back online."
+        : "Everything is in the cloud. Sync resumes when you're back online.",
       icon: CloudOff,
       tone: "muted",
     };
@@ -50,7 +85,7 @@ export function describeSync(sync: SyncView, mode: AccountMode): SyncLabel {
   if (sync.status === "error") {
     return {
       label: "Sync paused",
-      detail: sync.error ?? "Something went wrong. Your changes are safe on this device.",
+      detail: `${sync.error ?? "Something went wrong."} Your changes are saved on this device, not yet in the cloud.`,
       icon: TriangleAlert,
       tone: "warn",
     };
@@ -60,7 +95,7 @@ export function describeSync(sync: SyncView, mode: AccountMode): SyncLabel {
   }
   return {
     label: "Synced",
-    detail: `All changes are in the cloud${sync.lastSyncedAt ? ` · ${ago(sync.lastSyncedAt)}` : ""}.`,
+    detail: `All your preparation data is up to date${sync.lastSyncedAt ? ` · ${ago(sync.lastSyncedAt)}` : ""}.`,
     icon: Check,
     tone: "ok",
   };

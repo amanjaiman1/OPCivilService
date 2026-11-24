@@ -100,8 +100,10 @@ as the connection returns.
 
 Documents are network-first, so a fresh build is picked up on the next online
 navigation. When a new worker finishes installing, a *"A new version is
-ready → Reload"* toast appears; accepting posts `SKIP_WAITING` and reloads once
-the new worker takes control. Registrations are also re-checked on window focus
+ready → Reload"* toast appears; accepting gives pending changes up to 2.5 s to
+reach the cloud, then posts `SKIP_WAITING` and reloads once the new worker takes
+control. A tab still running an older version can't save over data written by a
+newer one: the server refuses it and the app asks for a reload. Registrations are also re-checked on window focus
 and hourly.
 
 Bump `CACHE_VERSION` in `public/sw.js` to discard every previous cache on the
@@ -152,8 +154,15 @@ refresh it too if those move — see `docs/design-system.md`.
   (`next start`, or the deployed site) — `next dev` is left alone so HMR works.
   It is registered on every page, public and private, after the page has loaded.
 - It needs a secure context: HTTPS, or `localhost`.
-- Data already lives in `localStorage` and syncs to Supabase when online, so
-  logging offline is safe; the sync provider pushes when the connection returns.
+- Data lives in `localStorage` and syncs to Supabase when online. Offline
+  editing is allowed on a device whose copy is verified as the account's (it
+  carries a sync stamp), and pushes when the connection returns. A fresh
+  install, or a browser whose site data was cleared, downloads the account
+  before anything is editable: see [Sync safety](./accounts.md#sync-safety).
+- The worker never reads, clears or writes `localStorage` or IndexedDB; it
+  manages only its own caches. Clearing caches, updating, or uninstalling the
+  app can't reset the account, in the cloud or on the device, beyond what the
+  browser itself deletes.
 - With cloud sync enabled, an expired Supabase session cannot be refreshed
   offline, so a cold offline launch after the token expires shows the sign-in
   screen. Local-only builds (no Supabase env vars) are unaffected.
