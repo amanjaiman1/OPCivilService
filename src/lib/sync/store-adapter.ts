@@ -4,15 +4,29 @@ import { useChronicle, readCloudSnapshot, SNAPSHOT_KEYS, type CloudSnapshot } fr
 import type { LocalStoreAdapter, Snapshot } from "./engine";
 
 /**
- * The sync engine's view of the zustand store: the synced slice only.
- * Changes to device-only state (delivery bookkeeping, the hydration flag) are
- * ignored, so they never trigger a cloud round trip.
+ * The sync engine's view of the zustand store: the synced slice, plus the
+ * stamp saying which cloud version of `accountId` it descends from (kept in
+ * the same persisted entry). Changes to device-only state (delivery
+ * bookkeeping, the hydration flag, the stamp itself) are ignored, so they
+ * never trigger a cloud round trip.
  */
-export function chronicleStoreAdapter(): LocalStoreAdapter {
+export function chronicleStoreAdapter(accountId: string): LocalStoreAdapter {
   return {
     read: () => readCloudSnapshot() as unknown as Snapshot,
-    apply: (next) =>
-      useChronicle.getState().applyCloudSnapshot(next as unknown as Partial<CloudSnapshot>),
+    readStamp: () => {
+      const stamp = useChronicle.getState()._sync;
+      return stamp && stamp.accountId === accountId && Number.isFinite(stamp.version) && stamp.version > 0
+        ? stamp.version
+        : null;
+    },
+    apply: (next, version) =>
+      useChronicle
+        .getState()
+        .applyCloudSnapshot(next as unknown as Partial<CloudSnapshot> | null, {
+          accountId,
+          version,
+          at: new Date().toISOString(),
+        }),
     subscribe: (onChange) =>
       useChronicle.subscribe((state, prev) => {
         for (const key of SNAPSHOT_KEYS) {

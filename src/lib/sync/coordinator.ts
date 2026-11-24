@@ -16,13 +16,20 @@ import type { SyncEngine, SyncState } from "./engine";
 
 export type SyncRole = "leader" | "follower";
 
+/** A decision taken on screen, carried out by whichever tab syncs. */
+export type SyncAction =
+  | { kind: "retry" }
+  | { kind: "resolveHold"; choice: "restore" | "confirm" }
+  | { kind: "initialise"; intent: "fresh" | "device" };
+
 type Message =
   | { type: "state"; state: SyncState }
   | { type: "hello" }
   | { type: "flush"; id: string }
   | { type: "flushed"; id: string; ok: boolean }
   | { type: "check"; version?: number | null }
-  | { type: "sync" };
+  | { type: "sync" }
+  | { type: "act"; action: SyncAction };
 
 export interface Coordinator {
   role(): SyncRole;
@@ -35,7 +42,14 @@ export interface Coordinator {
   /** Looks for another device's changes. `version`: what a live update says the cloud is at. */
   checkRemote(hint?: { version?: number | null }): void;
   syncNow(): void;
+  act(action: SyncAction): void;
   stop(): void;
+}
+
+function perform(engine: SyncEngine, action: SyncAction): void {
+  if (action.kind === "retry") void engine.retry();
+  else if (action.kind === "resolveHold") void engine.resolveHold(action.choice);
+  else void engine.initialise(action.intent);
 }
 
 export interface CoordinatorOptions {
@@ -87,6 +101,7 @@ export function startCoordinator(o: CoordinatorOptions): Coordinator {
           void engine.flush().then((ok) => post({ type: "flushed", id: m.id, ok }));
         else if (m.type === "check") void engine.checkRemote({ version: m.version });
         else if (m.type === "sync") void engine.sync();
+        else if (m.type === "act") perform(engine, m.action);
       } else if (role === "follower") {
         if (m.type === "state") o.onState(m.state);
         else if (m.type === "flushed") waiters.get(m.id)?.(m.ok);
@@ -143,6 +158,10 @@ export function startCoordinator(o: CoordinatorOptions): Coordinator {
     syncNow() {
       if (role === "leader") void engine?.sync();
       else post({ type: "sync" });
+    },
+    act(action) {
+      if (role === "leader" && engine) perform(engine, action);
+      else post({ type: "act", action });
     },
     stop() {
       stopped = true;

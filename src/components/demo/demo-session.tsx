@@ -42,6 +42,7 @@ export function DemoSession({ exitTo, children }: { exitTo: string; children: Re
       mode: "demo",
       user: null,
       syncNow: () => undefined,
+      act: () => undefined,
       flush: async () => true,
       signOut: async () => exitDemo(exitTo),
       endAfterDeletion: async () => exitDemo(exitTo),

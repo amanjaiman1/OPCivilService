@@ -13,6 +13,7 @@ import { DataBackup } from "@/components/layout/data-backup";
 import { useAccount, useSyncStatus } from "@/components/account/account-session";
 import { describeSync } from "@/components/account/sync-label";
 import { SettingsSection } from "./section";
+import { RecoveryPanel } from "./recovery-panel";
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -111,6 +112,8 @@ export function DataSettings() {
           </p>
           <DataBackup />
         </div>
+
+        {mode === "cloud" && <RecoveryPanel />}
 
         {conflicts.length > 0 && (
           <div className="rounded-2xl border border-warning/30 bg-warning/10 p-4">
