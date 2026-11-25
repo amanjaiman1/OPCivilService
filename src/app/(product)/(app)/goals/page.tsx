@@ -20,6 +20,7 @@ import {
   computeGoalProgress,
   contributionSeries,
   goalCategory,
+  groupGoalProgress,
   goalPortfolio,
   goalViewCounts,
   inGoalView,
@@ -162,6 +163,7 @@ export default function GoalsPage() {
     );
   }, [all, view, category, query, sort, slipping]);
 
+  const groups = useMemo(() => groupGoalProgress(visible), [visible]);
   const sparks = useMemo(() => {
     const m = new Map<string, number[]>();
     for (const p of visible) m.set(p.goal.id, contributionSeries(p.goal, data, today, 21).map((s) => s.value));
@@ -173,8 +175,9 @@ export default function GoalsPage() {
 
   if (!hydrated) return <Loading />;
 
-  function openAdd() {
-    setFormGoal(emptyGoal());
+  function openAdd(inCategory?: GoalCategory) {
+    const goal = emptyGoal();
+    setFormGoal(inCategory ? { ...goal, category: inCategory } : goal);
     setIsNew(true);
     setFormOpen(true);
   }
@@ -213,7 +216,7 @@ export default function GoalsPage() {
         title="Ambition, broken into the achievable."
         description="Name the number and what feeds it. Hours come from the journal, mastery from the syllabus, passes from the revision queue, so progress updates itself from what you've actually done."
         actions={
-          <Button onClick={openAdd}>
+          <Button onClick={() => openAdd(category === "all" ? undefined : category)}>
             <Plus className="h-4 w-4" /> New goal
           </Button>
         }
@@ -287,7 +290,7 @@ export default function GoalsPage() {
           title="No goals yet"
           description="Start with this week. Pick what feeds it, and the journal keeps score."
           action={
-            <Button onClick={openAdd}>
+            <Button onClick={() => openAdd(category === "all" ? undefined : category)}>
               <Plus className="h-4 w-4" /> Set your first goal
             </Button>
           }
@@ -373,17 +376,49 @@ export default function GoalsPage() {
               }
             />
           ) : (
-            <div className="grid gap-3 lg:grid-cols-2 [&>*]:min-w-0">
-              {visible.map((p) => (
-                <GoalCard
-                  key={p.goal.id}
-                  p={p}
-                  spark={sparks.get(p.goal.id) ?? []}
-                  onOpen={() => setDetailId(p.goal.id)}
-                  onEdit={() => openEdit(p.goal)}
-                  onDelete={() => del(p.goal)}
-                />
-              ))}
+            <div className="space-y-7">
+              {groups.map(({ category: label, records }) => {
+                const active = records.filter(({ goal }) => goal.status === "Active");
+                const completed = records.filter(({ goal }) => goal.status === "Completed");
+                const other = records.filter(({ goal }) => goal.status !== "Active" && goal.status !== "Completed");
+                const statuses = [
+                  { label: "Active", records: active },
+                  { label: "Completed", records: completed },
+                  { label: "Other statuses", records: other },
+                ].filter((status) => status.records.length);
+                const heading = `goal-category-${label.toLowerCase().replaceAll(" ", "-")}`;
+                return (
+                  <section key={label} aria-labelledby={heading} className="min-w-0 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2">
+                      <div className="flex flex-wrap items-baseline gap-x-2">
+                        <h2 id={heading} className="text-base font-semibold text-paper">{label}</h2>
+                        {active.length > 0 && <span className="text-xs text-paper/60">{active.length} active</span>}
+                        {completed.length > 0 && <span className="text-xs text-paper/60">{completed.length} completed</span>}
+                      </div>
+                      <Button variant="ghost" size="sm" aria-label={`Add a ${label} goal`} onClick={() => openAdd(label)}>
+                        <Plus className="h-4 w-4" /> Add goal
+                      </Button>
+                    </div>
+                    {statuses.map((status) => (
+                      <div key={status.label} className="space-y-2">
+                        {statuses.length > 1 && <h3 className="text-xs font-semibold text-paper/65">{status.label}</h3>}
+                        <div className="grid gap-3 lg:grid-cols-2 [&>*]:min-w-0">
+                          {status.records.map((p) => (
+                            <GoalCard
+                              key={p.goal.id}
+                              p={p}
+                              spark={sparks.get(p.goal.id) ?? []}
+                              onOpen={() => setDetailId(p.goal.id)}
+                              onEdit={() => openEdit(p.goal)}
+                              onDelete={() => del(p.goal)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </section>
+                );
+              })}
             </div>
           )}
         </>

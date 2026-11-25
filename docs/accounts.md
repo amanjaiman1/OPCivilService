@@ -109,6 +109,17 @@ Locks API; the others save locally, the leader picks those saves up through
 `storage` events, and its status is shared over a `BroadcastChannel`
 (`lib/sync/coordinator.ts`).
 
+### Weekly objective upgrade
+
+Snapshot version 18 gives legacy weekly objectives deterministic item IDs at
+hydration. The sync adapter also normalizes the ancestor and remote copy
+before merging, so an older text list cannot duplicate a migrated objective.
+Plans, items and canonical topic relationships still merge under the same
+account-scoped version checks. Once a version-18 snapshot reaches the cloud,
+the existing outdated-client guard asks earlier clients to reload before
+saving. The server migration adds one date field to the existing
+service-only reminder reader without changing tables or permissions.
+
 ### Data from before accounts
 
 Older versions stored everything under one unscoped key. On the first sign-in

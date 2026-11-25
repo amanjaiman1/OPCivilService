@@ -82,8 +82,13 @@ export function JournalComposer({
       if (!ok) return;
     }
     const entry = prepared.entry;
-    const { celebration: earned } = commitJournalEntry(editor, entry, { previousDate: isEdit ? initial.date : undefined, isEdit });
-    if (earned) setCelebration(earned);
+    try {
+      const { celebration: earned } = commitJournalEntry(editor, entry, { previousDate: isEdit ? initial.date : undefined, isEdit });
+      if (earned) setCelebration(earned);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "The entry could not be saved.");
+      return;
+    }
 
     // What the day did for the habits that read the journal and revision.
     const after = useChronicle.getState();
@@ -92,7 +97,7 @@ export function JournalComposer({
       description: movedSummary(habitsMovedOn(after.habits, habitContext(after, todayISO), entry.date, ["journal", "revision"])),
     });
 
-    onSaved?.(entry);
+    onSaved?.(after.journal.find((saved) => saved.date === entry.date) ?? entry);
     onClose();
   }
 

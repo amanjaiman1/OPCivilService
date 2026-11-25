@@ -125,7 +125,7 @@ function TopicRow({
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(topic.name);
 
-  const l = linkageFor(linkage, subject.id, topic.name);
+  const l = linkageFor(linkage, subject.id, topic);
   const since = daysSinceTouched(topic, today);
   const stale = isStale(topic, today);
 
@@ -619,8 +619,8 @@ export default function SubjectsPage() {
   }, [journal, subjects]);
 
   const linkage = useMemo(
-    () => buildLinkage(revisions, mistakes, journal, today),
-    [revisions, mistakes, journal, today],
+    () => buildLinkage(revisions, mistakes, journal, today, subjects),
+    [revisions, mistakes, journal, today, subjects],
   );
   const stats = useMemo(() => syllabusStats(subjects, today), [subjects, today]);
   const coverage = useMemo(() => coverageByPaper(subjects), [subjects]);

@@ -24,6 +24,73 @@ export function normName(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+/** Canonical IDs converge when two devices create the same named custom topic. */
+export function customTopicId(subjectId: string, name: string): string {
+  // Encoding code points keeps the key injective, including punctuation and Unicode.
+  const encode = (text: string) => Array.from(text, (char) => char.codePointAt(0)?.toString(36)).join(".");
+  return `topic_custom_${encode(subjectId)}_${encode(normName(name))}`;
+}
+
+export function completionKey(completion: TopicCompletion): string {
+  return completion.topicId ?? JSON.stringify([completion.subjectId ?? "", normName(completion.name)]);
+}
+
+export function uniqueTopicCompletions(completions: TopicCompletion[]): TopicCompletion[] {
+  const seen = new Set<string>();
+  return completions.filter((completion) => {
+    const key = completionKey(completion);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/** Resolve the whole entry before any store mutation. Unassigned topics stay unassigned. */
+export function resolveCompletedTopics(
+  completions: TopicCompletion[],
+  subjects: Subject[],
+  previous: TopicCompletion[],
+): { subjects: Subject[]; completions: TopicCompletion[] } {
+  const bySubject = new Map(subjects.map((subject) => [subject.id, subject]));
+  const previousById = new Map(previous.map((completion) => [completion.id, completion]));
+  const resolved = completions.flatMap((completion) => {
+    const name = completion.name.trim().replace(/\s+/g, " ");
+    if (!name) return [];
+    if (completion.topicId) {
+      const subject = completion.subjectId
+        ? bySubject.get(completion.subjectId)
+        : findTopic(subjects, completion.topicId)?.subject;
+      const found = subject?.topics.find((topic) => topic.id === completion.topicId);
+      if (subject && found) return [{ ...completion, name: found.name, subjectId: subject.id }];
+      if (previousById.get(completion.id)?.topicId === completion.topicId) return [completion];
+      throw new Error(`“${name}” is no longer in the syllabus. Choose the topic again.`);
+    }
+    if (!completion.subjectId) return [{ ...completion, name }];
+
+    const subject = bySubject.get(completion.subjectId);
+    if (!subject) {
+      if (previousById.get(completion.id)?.subjectId === completion.subjectId) return [completion];
+      throw new Error(`The subject for “${name}” is no longer available. Choose another subject.`);
+    }
+    const matches = subject.topics.filter((topic) => normName(topic.name) === normName(name));
+    if (matches.length > 1) throw new Error(`Several topics match “${name}”. Select an existing topic from the list.`);
+    let topic = matches[0];
+    if (!topic) {
+      const id = customTopicId(subject.id, name);
+      // A renamed topic can still own the deterministic ID of its original name.
+      topic = subject.topics.find((candidate) => candidate.id === id) ?? {
+        id, name, status: "untouched", confidence: 0, revisionCount: 0,
+      };
+      if (!subject.topics.includes(topic)) bySubject.set(subject.id, { ...subject, topics: [...subject.topics, topic] });
+    }
+    return [{ ...completion, name: topic.name, topicId: topic.id }];
+  });
+  return {
+    subjects: subjects.some((subject) => bySubject.get(subject.id) !== subject) ? [...bySubject.values()] : subjects,
+    completions: uniqueTopicCompletions(resolved),
+  };
+}
+
 /** A deterministic id for a completion read from the old free-text list. */
 function legacyId(name: string, i: number): string {
   let h = 0;
@@ -72,7 +139,10 @@ export function matchSyllabusTopic(
  * an entry already on the new shape comes back unchanged (same object).
  */
 export function upgradeEntryTopics(entry: JournalEntry, subjects: Subject[]): JournalEntry {
-  if (entry.completedTopics && !entry.topicsCompleted) return entry;
+  if (entry.completedTopics && !entry.topicsCompleted) {
+    const unique = uniqueTopicCompletions(entry.completedTopics);
+    return unique.length === entry.completedTopics.length ? entry : { ...entry, completedTopics: unique };
+  }
   if (!entry.completedTopics && !entry.topicsCompleted?.length) {
     if (!("topicsCompleted" in entry)) return entry;
     const next = { ...entry };
@@ -90,11 +160,11 @@ export function upgradeEntryTopics(entry: JournalEntry, subjects: Subject[]): Jo
     ? [
         ...entry.completedTopics,
         ...legacy.filter(
-          (l) => !entry.completedTopics!.some((c) => (l.topicId && c.topicId === l.topicId) || normName(c.name) === normName(l.name)),
+          (l) => !entry.completedTopics!.some((c) => (l.topicId && c.topicId === l.topicId) || (!c.subjectId && !l.subjectId && normName(c.name) === normName(l.name))),
         ),
       ]
     : legacy;
-  const next: JournalEntry = { ...entry, completedTopics };
+  const next: JournalEntry = { ...entry, completedTopics: uniqueTopicCompletions(completedTopics) };
   delete next.topicsCompleted;
   return next;
 }
@@ -141,8 +211,8 @@ function historyIndex(journal: JournalEntry[]) {
         if (!h.last || e.date > h.last) h.last = e.date;
         byTopic.set(c.topicId, h);
       } else {
-        const k = normName(c.name);
-        if (!k) continue;
+        const k = completionKey(c);
+        if (!normName(c.name)) continue;
         const h = custom.get(k) ?? { name: c.name, subjectId: c.subjectId, times: 0 };
         h.times += 1;
         if (!h.last || e.date > h.last) {
@@ -221,9 +291,9 @@ export function searchTopicOptions(
   for (const [k, h] of custom) {
     const key = `custom:${k}`;
     if (opts.exclude?.has(key)) continue;
-    if (opts.subjectId && h.subjectId && h.subjectId !== opts.subjectId) continue;
+    if (opts.subjectId && h.subjectId !== opts.subjectId) continue;
     // A saved name that now exists in the syllabus is offered as the syllabus topic instead.
-    if (matchSyllabusTopic(h.name, subjects, h.subjectId)) continue;
+    if (h.subjectId && matchSyllabusTopic(h.name, subjects, h.subjectId)) continue;
     const sc = score(q, h.name, h.subjectId ? (subjectName.get(h.subjectId) ?? "") : "");
     if (!sc) continue;
     scored.push({
@@ -301,7 +371,7 @@ export function buildTopicIndex(
 ): TopicRecord[] {
   const records = new Map<string, TopicRecord>();
   const revByKey = new Map<string, RevisionItem>();
-  for (const r of revisions) revByKey.set(`${r.subjectId}::${normName(r.topic)}`, r);
+  for (const r of revisions) revByKey.set(r.topicId ?? `${r.subjectId}::${normName(r.topic)}`, r);
   const openByKey = new Map<string, number>();
   for (const m of mistakes) {
     if (m.status === "Mastered") continue;
@@ -311,15 +381,15 @@ export function buildTopicIndex(
 
   for (const e of journal) {
     for (const c of completedTopicsOf(e)) {
-      const key = c.topicId ?? `custom:${normName(c.name)}`;
-      if (key === "custom:") continue;
+      const key = c.topicId ?? `custom:${completionKey(c)}`;
+      if (!normName(c.name)) continue;
       let rec = records.get(key);
       if (!rec) {
         const found = c.topicId ? findTopic(subjects, c.topicId) : null;
         const subjectId = found?.subject.id ?? c.subjectId;
         const name = found?.topic.name ?? c.name;
         const rk = subjectId ? `${subjectId}::${normName(name)}` : null;
-        const revision = rk ? (revByKey.get(rk) ?? null) : null;
+        const revision = (c.topicId ? revByKey.get(c.topicId) : undefined) ?? (rk ? revByKey.get(rk) : undefined) ?? null;
         rec = {
           key,
           name,

@@ -7,6 +7,8 @@ import { useChronicle, type JournalSaveResult } from "@/lib/store";
 import { Field, Input, Textarea, Select, ListEditor } from "@/components/ui/form";
 import { RadialProgress } from "@/components/ui/progress";
 import { RevisionPicker } from "./revision-picker";
+import type { WeeklyTargetIntent } from "@/lib/roadmap";
+import { WeeklyTargets } from "./weekly-targets";
 import { TopicPicker } from "./topic-picker";
 import { AttachmentTray, type SessionFile } from "@/components/attachments/attachment-tray";
 import { removeStoredPaths } from "@/lib/file-storage";
@@ -328,6 +330,7 @@ export interface JournalDraftSnapshot {
   replaced: Record<string, string>;
   goalIds: string[];
   scheduleRevision: boolean;
+  weeklyTargets?: WeeklyTargetIntent[];
 }
 
 export interface JournalEditor {
@@ -342,6 +345,9 @@ export interface JournalEditor {
   setGoalIds: React.Dispatch<React.SetStateAction<string[]>>;
   scheduleRevision: boolean;
   setScheduleRevision: (v: boolean) => void;
+  weeklyTargets: WeeklyTargetIntent[];
+  setWeeklyTargets: (changes: WeeklyTargetIntent[]) => void;
+  entryDirty: boolean;
   more: boolean;
   setMore: React.Dispatch<React.SetStateAction<boolean>>;
   error: string | null;
@@ -365,6 +371,7 @@ export function useJournalEditor(initial: JournalEntry): JournalEditor {
   const [uploading, setUploading] = useState(false);
   const [goalIds, setGoalIds] = useState<string[]>(() => linkedGoalIds(useChronicle.getState().goals, initial.date));
   const [scheduleRevision, setScheduleRevision] = useState(true);
+  const [weeklyTargets, setWeeklyTargets] = useState<WeeklyTargetIntent[]>([]);
   const [more, setMore] = useState(() => hasMore(initial));
   const [error, setError] = useState<string | null>(null);
 
@@ -381,6 +388,7 @@ export function useJournalEditor(initial: JournalEntry): JournalEditor {
     setReplaced(restore?.replaced ?? {});
     setGoalIds(restore?.goalIds ?? linkedGoalIds(useChronicle.getState().goals, next.date));
     setScheduleRevision(restore?.scheduleRevision ?? true);
+    setWeeklyTargets(restore?.weeklyTargets ?? []);
     setMore(hasMore(d));
     setError(null);
   }, []);
@@ -410,10 +418,11 @@ export function useJournalEditor(initial: JournalEntry): JournalEditor {
   );
 
   const baseJson = useMemo(() => JSON.stringify(toDraft(base)), [base]);
-  const dirty = useMemo(() => JSON.stringify(draft) !== baseJson || sessionFiles.length > 0, [draft, baseJson, sessionFiles]);
+  const entryDirty = useMemo(() => JSON.stringify(draft) !== baseJson || sessionFiles.length > 0, [draft, baseJson, sessionFiles]);
+  const dirty = entryDirty || weeklyTargets.length > 0;
   const snapshot = useCallback(
-    () => ({ draft, sessionFiles, replaced, goalIds, scheduleRevision }),
-    [draft, sessionFiles, replaced, goalIds, scheduleRevision],
+    () => ({ draft, sessionFiles, replaced, goalIds, scheduleRevision, weeklyTargets }),
+    [draft, sessionFiles, replaced, goalIds, scheduleRevision, weeklyTargets],
   );
 
   return useMemo(
@@ -428,6 +437,9 @@ export function useJournalEditor(initial: JournalEntry): JournalEditor {
       setGoalIds,
       scheduleRevision,
       setScheduleRevision,
+      weeklyTargets,
+      setWeeklyTargets,
+      entryDirty,
       more,
       setMore,
       error,
@@ -440,7 +452,7 @@ export function useJournalEditor(initial: JournalEntry): JournalEditor {
       onReplace,
       discardUploads,
     }),
-    [base, draft, patch, sessionFiles, replaced, uploading, goalIds, scheduleRevision, more, error, dirty, reset, snapshot, onBusyChange, onSessionFile, onReplace, discardUploads],
+    [base, draft, patch, sessionFiles, replaced, uploading, goalIds, scheduleRevision, weeklyTargets, entryDirty, more, error, dirty, reset, snapshot, onBusyChange, onSessionFile, onReplace, discardUploads],
   );
 }
 
@@ -485,7 +497,7 @@ export interface JournalCelebration {
  * syllabus topics, revisions) and marks a first entry for the day accomplished.
  */
 export function commitJournalEntry(
-  editor: Pick<JournalEditor, "sessionFiles" | "replaced" | "goalIds" | "scheduleRevision" | "discardUploads">,
+  editor: Pick<JournalEditor, "sessionFiles" | "replaced" | "goalIds" | "scheduleRevision" | "weeklyTargets" | "discardUploads">,
   entry: JournalEntry,
   opts: { previousDate?: ISODate; isEdit: boolean },
 ): { result: JournalSaveResult; celebration: JournalCelebration | null } {
@@ -497,6 +509,7 @@ export function commitJournalEntry(
     newFiles: editor.sessionFiles.filter((f) => kept.has(f.record.id)).map((f) => f.record),
     goalIds: editor.goalIds,
     scheduleRevision: editor.scheduleRevision,
+    weeklyTargets: editor.weeklyTargets,
     replaced: editor.replaced,
   });
   editor.discardUploads(kept);
@@ -546,7 +559,7 @@ export function JournalFields({
     const before = new Set(
       (journal.find((j) => j.date === base.date)?.completedTopics ?? []).map((c) => c.topicId).filter(Boolean),
     );
-    return (draft.completedTopics ?? []).filter((c) => c.topicId && !before.has(c.topicId)).length;
+    return (draft.completedTopics ?? []).filter((c) => c.topicId ? !before.has(c.topicId) : Boolean(c.subjectId)).length;
   }, [draft.completedTopics, journal, base.date]);
 
   const sleepLine = (
@@ -644,8 +657,7 @@ export function JournalFields({
             className="mt-0.5 h-4 w-4 accent-[rgb(var(--accent))]"
           />
           <span>
-            Put {newSyllabusTopics === 1 ? "this topic" : `these ${newSyllabusTopics} topics`} on the revision queue, first pass
-            tomorrow.
+            Put {newSyllabusTopics === 1 ? "this topic" : `these ${newSyllabusTopics} topics`} on the revision queue.
           </span>
         </label>
       )}
@@ -788,6 +800,7 @@ export function JournalFields({
     </section>
   );
 
+  const planning = <WeeklyTargets className={page ? "border-t border-line p-4 sm:p-6" : undefined} entry={draft} changes={editor.weeklyTargets} onChange={editor.setWeeklyTargets} />;
   if (page) {
     const topicCount = draft.completedTopics?.length ?? 0;
     const pad = "p-4 sm:p-6";
@@ -817,7 +830,7 @@ export function JournalFields({
             />
             {topicCount === 0 && (
               <p className="rounded-xl border border-dashed border-paper/15 px-3.5 py-3 text-[0.76rem] leading-relaxed text-paper/55">
-                Nothing marked yet. A finished syllabus topic moves forward on Subject Progress and can join the revision queue.
+                Nothing marked yet. Choose a subject to update Subject Progress and schedule revision.
               </p>
             )}
             {newSyllabusTopics > 0 && (
@@ -829,12 +842,14 @@ export function JournalFields({
                   className="mt-0.5 h-4 w-4 accent-[rgb(var(--accent))]"
                 />
                 <span>
-                  Put {newSyllabusTopics === 1 ? "this topic" : `these ${newSyllabusTopics} topics`} on the revision queue, first pass tomorrow.
+                  Put {newSyllabusTopics === 1 ? "this topic" : `these ${newSyllabusTopics} topics`} on the revision queue.
                 </span>
               </label>
             )}
           </HeroCard>
         </div>
+
+        {planning}
 
         {/* Then the rest of the day, each in its own bay of the same sheet. */}
         <div className="grid divide-y divide-line border-t border-line lg:grid-cols-2 lg:divide-x lg:divide-y-0">
@@ -904,6 +919,7 @@ export function JournalFields({
             type="date"
             value={draft.date}
             max={todayISO}
+            disabled={editor.weeklyTargets.length > 0}
             onChange={(e) => {
               const picked = e.target.value;
               patch({ date: picked && picked > todayISO ? todayISO : picked });
@@ -920,6 +936,7 @@ export function JournalFields({
       )}
       {study}
       {topics}
+      {planning}
       {revision}
       {feel}
       {notes}

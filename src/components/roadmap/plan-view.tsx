@@ -53,7 +53,7 @@ import { cn, formatHours, toISODate } from "@/lib/utils";
 import { ItemForm, type ItemFormRequest } from "./item-form";
 import { CarryDialog, ItemList } from "./item-list";
 import { DeletePlanDialog, DuplicatePlanDialog } from "./plan-dialogs";
-import { PlanReviewBlock } from "./plan-review";
+import { PlanReviewBlock, PlanReviewEvidence } from "./plan-review";
 import { MonthCalendar, WeekStrip } from "./calendar";
 import { Block, ExecutionBar, LEVEL_ICON, LevelBadge, useGoalData, useRoadmapNav, useToday, useWeekStart } from "./shared";
 import type { PlanFormRequest } from "./plan-form";
@@ -284,6 +284,13 @@ export function PlanView({
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
         <div className="min-w-0 space-y-4">
+          {(plan.level === "week" || own.objectives > 0) && (
+            <Card className="p-5 sm:p-6">
+              <Block title={`Objectives · ${own.objectivesDone} of ${own.objectives} complete`}>
+                <ItemList plan={plan} kind="objective" today={today} highlightId={highlightItem} onOpen={setItemReq} readOnly={archived} />
+              </Block>
+            </Card>
+          )}
           <Card className="p-5 sm:p-6">
             <Block
               title="What it's for"
@@ -611,6 +618,7 @@ export function PlanView({
           {archived && plan.review && (
             <Card className="p-5 sm:p-6">
               <Block title="Review">
+                {plan.review.snapshot && <PlanReviewEvidence snapshot={plan.review.snapshot} />}
                 <div className="grid gap-3 text-sm text-paper/80 sm:grid-cols-3">
                   {(["wentWell", "improve", "nextPriorities"] as const).map((k) => (
                     <div key={k}>

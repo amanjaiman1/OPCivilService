@@ -45,6 +45,7 @@ let backend: Backend | null = null;
 let activeId: string | null = null;
 let writesEnabled = false;
 let writePause = 0;
+let accountSnapshotWriteFailed = false;
 
 function store(): Backend | null {
   if (backend) return backend;
@@ -79,7 +80,9 @@ export function readKey(key: string): string | null {
 
 export function writeKey(key: string, value: string): boolean {
   try {
-    store()?.setItem(key, value);
+    const storage = store();
+    if (!storage) return false;
+    storage.setItem(key, value);
     return true;
   } catch {
     return false; // quota or disabled storage; the in-memory state still works
@@ -114,6 +117,7 @@ export function allKeys(): string[] {
 export function setActiveAccount(id: string | null): void {
   activeId = id;
   writesEnabled = false;
+  accountSnapshotWriteFailed = false;
 }
 
 export function enableWrites(): void {
@@ -130,6 +134,11 @@ export function withoutWrites<T>(fn: () => T): T {
   }
 }
 
+/** The last account snapshot is only in memory if local storage refused it. */
+export function didAccountSnapshotWriteFail(): boolean {
+  return accountSnapshotWriteFailed;
+}
+
 /** The zustand storage: transparently scoped to the active account. */
 export const accountStorage: StateStorage = {
   getItem: (name) => {
@@ -139,7 +148,10 @@ export const accountStorage: StateStorage = {
   setItem: (name, value) => {
     if (!writesEnabled || writePause > 0) return;
     const key = scopedKey(name);
-    if (key) writeKey(key, value);
+    if (key) {
+      const saved = writeKey(key, value);
+      if (name === STORE_KEY) accountSnapshotWriteFailed = !saved;
+    }
   },
   removeItem: (name) => {
     const key = scopedKey(name);

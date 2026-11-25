@@ -9,11 +9,12 @@ import type {
   PlanLevel,
   PlanPriority,
   PlanReview,
+  PlanReviewSnapshot,
   RoadmapPlan,
   Subject,
 } from "./types";
 import { daysBetween, fromISODate, round, toISODate, uid } from "./utils";
-import { countCompletedTopics } from "./topics";
+import { countCompletedTopics, normName } from "./topics";
 
 /* ════════════════════════════════════════════════════════════════
    THE ROADMAP — your own plans, by year, month and week.
@@ -319,7 +320,7 @@ export function blankPlan(
 
 export function blankItem(kind: PlanItemKind, title: string, stamp: string = now()): PlanItem {
   return {
-    id: uid(kind === "milestone" ? "pm" : "pa"),
+    id: uid(kind === "milestone" ? "pm" : kind === "objective" ? "po" : "pa"),
     kind,
     title: title.trim().slice(0, LIMITS.itemTitle),
     status: "notStarted",
@@ -331,11 +332,16 @@ export function blankItem(kind: PlanItemKind, title: string, stamp: string = now
  * A status change, with the completion time kept in step. An activity that
  * was carried forward keeps that link; taking it back is `undoCarry`.
  */
-export function withStatus(item: PlanItem, status: PlanItemStatus, stamp: string = now()): PlanItem {
+export function withStatus(item: PlanItem, status: PlanItemStatus, stamp: string = now(), date = toISODate(new Date(stamp))): PlanItem {
   if (item.status === status) return item;
   const next: PlanItem = { ...item, status };
-  if (status === "completed") next.completedAt = item.completedAt ?? stamp;
-  else delete next.completedAt;
+  if (status === "completed") {
+    next.completedAt = stamp;
+    next.completedOn = date;
+  } else {
+    delete next.completedAt;
+    delete next.completedOn;
+  }
   return next;
 }
 
@@ -510,7 +516,7 @@ export type ItemErrors = Partial<Record<"title" | "targetDate" | "goalMilestone"
 export function validateItem(item: PlanItem): ItemErrors {
   const errors: ItemErrors = {};
   const t = item.title.trim();
-  if (!t) errors.title = item.kind === "milestone" ? "Name the milestone." : "Name the activity.";
+  if (!t) errors.title = `Name the ${item.kind}.`;
   else if (t.length > LIMITS.itemTitle) errors.title = `Keep it under ${LIMITS.itemTitle} characters.`;
   if (item.targetDate !== undefined && !isISODate(item.targetDate)) errors.targetDate = "Pick a valid date.";
   if (item.goalMilestoneId && !item.goalId) errors.goalMilestone = "Choose the goal first.";
@@ -569,6 +575,10 @@ export function activitiesOf(plan: RoadmapPlan): PlanItem[] {
   return (plan.items ?? []).filter((i) => i.kind === "activity");
 }
 
+export function objectivesOf(plan: RoadmapPlan): PlanItem[] {
+  return (plan.items ?? []).filter((item) => item.kind === "objective");
+}
+
 export function milestonesOf(plan: RoadmapPlan): PlanItem[] {
   return (plan.items ?? []).filter((i) => i.kind === "milestone");
 }
@@ -601,7 +611,7 @@ export function isCarried(plans: RoadmapPlan[], item: PlanItem): boolean {
 
 /** Activities that could still move on to the next plan. */
 export function carryable(plans: RoadmapPlan[], plan: RoadmapPlan): PlanItem[] {
-  return activitiesOf(plan).filter((i) => i.status !== "completed" && !isCarried(plans, i));
+  return (plan.items ?? []).filter((i) => i.kind !== "milestone" && i.status !== "completed" && !isCarried(plans, i));
 }
 
 /** The first day of the period after this one. */
@@ -650,16 +660,16 @@ export function carryForward(
 ): { plans: RoadmapPlan[]; moved: number } {
   const from = plans.find((p) => p.id === fromId);
   const to = plans.find((p) => p.id === toId);
-  if (!from || !to || from.id === to.id) return { plans, moved: 0 };
+  if (!from || !to || from.id === to.id || isArchived(plans, from) || isArchived(plans, to)) return { plans, moved: 0 };
   const wanted = new Set(itemIds);
   const offset = daysBetween(from.start, to.start);
   const copies: PlanItem[] = [];
   const links = new Map<string, PlanItemRef>();
   for (const it of from.items ?? []) {
-    if (!wanted.has(it.id) || it.kind !== "activity" || it.status === "completed" || isCarried(plans, it)) continue;
+    if (!wanted.has(it.id) || it.kind === "milestone" || it.status === "completed" || isCarried(plans, it)) continue;
     const copy: PlanItem = {
-      id: uid("pa"),
-      kind: "activity",
+      id: uid(it.kind === "objective" ? "po" : "pa"),
+      kind: it.kind,
       title: it.title,
       status: it.status === "inProgress" ? "inProgress" : "notStarted",
       createdAt: stamp,
@@ -683,6 +693,7 @@ export function carryForward(
           if (!ref) return it;
           const moved: PlanItem = { ...it, status: "deferred", carriedTo: ref };
           delete moved.completedAt;
+          delete moved.completedOn;
           return moved;
         }),
       };
@@ -706,8 +717,10 @@ export function undoCarry(
 ): { plans: RoadmapPlan[]; ok: boolean; reason?: string } {
   const plan = plans.find((p) => p.id === planId);
   const original = plan?.items?.find((i) => i.id === itemId);
-  if (!plan || !original?.carriedTo) return { plans, ok: false, reason: "This activity wasn't carried forward." };
+  if (!plan || !original?.carriedTo) return { plans, ok: false, reason: "This item wasn't carried forward." };
+  if (isArchived(plans, plan)) return { plans, ok: false, reason: "Restore this plan before changing its items." };
   const copy = findItem(plans, original.carriedTo);
+  if (copy && isArchived(plans, copy.plan)) return { plans, ok: false, reason: "Restore the destination plan before bringing this item back." };
   if (copy && (copy.item.status === "completed" || copy.item.journalDates?.length || copy.item.carriedTo)) {
     return { plans, ok: false, reason: `It has been worked on in “${planName(copy.plan)}”, so it stays there.` };
   }
@@ -745,6 +758,7 @@ export function duplicatePlan(
   target: { year?: number; month?: string; start?: ISODate; title?: string },
   stamp: string = now(),
 ): RoadmapPlan {
+  plan = tidyPlan(plan);
   const fresh = blankPlan(plan.level, target, stamp);
   let shift: (iso: ISODate) => ISODate;
   if (plan.level === "year") {
@@ -771,7 +785,7 @@ export function duplicatePlan(
   if (plan.goalIds?.length) copy.goalIds = [...plan.goalIds];
   if (plan.items?.length) {
     copy.items = plan.items.map((it) => {
-      const c: PlanItem = { id: uid(it.kind === "milestone" ? "pm" : "pa"), kind: it.kind, title: it.title, status: "notStarted", createdAt: stamp };
+      const c: PlanItem = { id: blankItem(it.kind, it.title, stamp).id, kind: it.kind, title: it.title, status: "notStarted", createdAt: stamp };
       for (const k of ["description", "priority", "subjectId", "category", "goalId", "goalMilestoneId", "notes"] as const) {
         if (it[k] !== undefined) (c as unknown as Record<string, unknown>)[k] = it[k];
       }
@@ -798,6 +812,8 @@ export interface ExecutionCounts {
   overdue: number;
   /** Share of counted activities completed, 0–100. Null with none. */
   pct: number | null;
+  objectives: number;
+  objectivesDone: number;
   milestones: number;
   milestonesDone: number;
   milestonesOverdue: number;
@@ -813,6 +829,8 @@ function emptyCounts(): ExecutionCounts {
     carried: 0,
     overdue: 0,
     pct: null,
+    objectives: 0,
+    objectivesDone: 0,
     milestones: 0,
     milestonesDone: 0,
     milestonesOverdue: 0,
@@ -830,6 +848,11 @@ function tally(out: ExecutionCounts, plans: RoadmapPlan[], plan: RoadmapPlan, it
     out.milestones++;
     if (item.status === "completed") out.milestonesDone++;
     else if (isOverdue(item, plan, today)) out.milestonesOverdue++;
+    return;
+  }
+  if (item.kind === "objective") {
+    out.objectives++;
+    if (item.status === "completed") out.objectivesDone++;
     return;
   }
   out.total++;
@@ -1142,6 +1165,73 @@ export function stripGoal(plans: RoadmapPlan[], goalId: string, stamp: string = 
 
 /* ── the journal: what actually happened ─────────────────────────── */
 
+export interface WeeklyTargetIntent extends PlanItemRef {
+  expectedStatus: PlanItemStatus;
+  expectedTitle?: string;
+  expectedTargetDate?: ISODate;
+  expectedCompletedAt?: string;
+  complete: boolean;
+}
+
+/** Group overlapping weeks in calendar order. Each item stays with its original plan. */
+export function weeklyTargets(plans: RoadmapPlan[], date: ISODate) {
+  return plans
+    .filter((plan) => plan.level === "week" && plan.start <= date && date <= plan.end && !isArchived(plans, plan))
+    .sort(byStart)
+    .map((plan) => {
+      const priority = (item: PlanItem) => item.targetDate === date ? 0
+        : item.targetDate && item.targetDate < date ? 1
+          : !item.targetDate ? 2 : 3;
+      const items = (plan.items ?? []).filter((item) => {
+        if (item.status === "completed") return item.completedOn === date || item.journalDates?.includes(date);
+        if (item.status === "deferred" || isCarried(plans, item)) return false;
+        return !item.targetDate || item.targetDate <= date || (item.kind === "milestone" && item.targetDate <= plan.end);
+      }).sort((a, b) => priority(a) - priority(b) || (a.targetDate ?? "").localeCompare(b.targetDate ?? ""));
+      return { plan, items };
+    }).filter((group) => group.items.length);
+}
+
+/** Titles can suggest intent. They never change a plan item's state. */
+export function suggestsWeeklyTarget(item: PlanItem, topics: JournalEntry["completedTopics"]): boolean {
+  if (item.kind !== "objective") return false;
+  const title = normName(item.title).replace(/^complete /, "");
+  return (topics ?? []).some((topic) =>
+    normName(topic.name) === title && (!item.subjectId || item.subjectId === topic.subjectId),
+  );
+}
+
+/** Validate every draft before applying any. Retrying a completed save is safe. */
+export function applyWeeklyTargets(
+  plans: RoadmapPlan[], changes: WeeklyTargetIntent[], date: ISODate, journalExists: boolean, stamp = now(),
+): RoadmapPlan[] {
+  if (!changes.length) return plans;
+  const updates = new Map<string, Map<string, PlanItem>>();
+  for (const change of changes) {
+    const hit = findItem(plans, change);
+    const fail = () => new Error(`Weekly target ${hit ? `“${hit.item.title}” ` : ""}changed elsewhere. Review your selection and try again.`);
+    if (!hit || hit.plan.level !== "week" || date < hit.plan.start || date > hit.plan.end || isArchived(plans, hit.plan) ||
+      hit.item.status === "deferred" || isCarried(plans, hit.item)) throw fail();
+    const item = hit.item;
+    const done = item.status === "completed";
+    if (done === change.complete) {
+      // Preserve someone else's completion date and journal links on a concurrent save.
+      continue;
+    }
+    if (item.status !== change.expectedStatus || item.completedAt !== change.expectedCompletedAt ||
+      (change.expectedTitle !== undefined && (item.title !== change.expectedTitle || item.targetDate !== change.expectedTargetDate))) throw fail();
+    if (!change.complete && item.completedOn !== date && !item.journalDates?.includes(date)) throw fail();
+    const next = withStatus(item, change.complete ? "completed" : "notStarted", stamp, date);
+    const withLink = change.complete && journalExists ? withJournalDate(next, date, true) : next;
+    const group = updates.get(hit.plan.id) ?? new Map<string, PlanItem>();
+    group.set(item.id, withLink);
+    updates.set(hit.plan.id, group);
+  }
+  return updates.size ? plans.map((plan) => {
+    const group = updates.get(plan.id);
+    return group ? { ...plan, updatedAt: stamp, items: plan.items?.map((item) => group.get(item.id) ?? item) } : plan;
+  }) : plans;
+}
+
 /** Activities someone linked to a journal day. */
 export function itemsForJournalDay(plans: RoadmapPlan[], date: ISODate): { plan: RoadmapPlan; item: PlanItem }[] {
   const out: { plan: RoadmapPlan; item: PlanItem }[] = [];
@@ -1229,6 +1319,29 @@ export function recordedBetween(journal: JournalEntry[], start: ISODate, end: IS
   };
 }
 
+export function buildPlanReviewSnapshot(
+  plans: RoadmapPlan[], plan: RoadmapPlan, journal: JournalEntry[], today: ISODate,
+): PlanReviewSnapshot {
+  const recorded = recordedBetween(journal, plan.start, plan.end, today);
+  const summary: PlanReviewSnapshot = {
+    objectives: [], activities: [], milestones: [], remaining: [], deferred: [], carried: [],
+    journalDays: recorded.days, studyHours: recorded.hours, topics: recorded.topics,
+  };
+  const children = descendantIds(plans, plan.id);
+  const scope = [plan, ...plans.filter((child) => children.has(child.id)).sort(byStart)];
+  for (const current of scope) {
+    for (const item of current.items ?? []) {
+      if (item.status === "completed") {
+        const key = item.kind === "objective" ? "objectives" : item.kind === "milestone" ? "milestones" : "activities";
+        summary[key].push(item.title);
+      } else if (isCarried(plans, item)) summary.carried.push(item.title);
+      else if (item.status === "deferred") summary.deferred.push(item.title);
+      else summary.remaining.push(item.title);
+    }
+  }
+  return summary;
+}
+
 export interface SubjectPlanVsRecord {
   subjectId: string;
   name: string;
@@ -1310,7 +1423,7 @@ function cleanItem(raw: unknown, fallbackStamp: string, taken: Set<string>): Pla
   taken.add(id);
   const item: PlanItem = {
     id,
-    kind: r.kind === "milestone" ? "milestone" : "activity",
+    kind: r.kind === "milestone" || r.kind === "objective" ? r.kind : "activity",
     title: str(r.title) ?? "Untitled",
     status: typeof r.status === "string" && STATUS_SET.has(r.status) ? (r.status as PlanItemStatus) : "notStarted",
     createdAt: typeof r.createdAt === "string" && r.createdAt ? r.createdAt : fallbackStamp,
@@ -1332,6 +1445,7 @@ function cleanItem(raw: unknown, fallbackStamp: string, taken: Set<string>): Pla
   const notes = str(r.notes);
   if (notes) item.notes = notes;
   if (item.status === "completed" && typeof r.completedAt === "string" && r.completedAt) item.completedAt = r.completedAt;
+  if (item.status === "completed" && isISODate(r.completedOn)) item.completedOn = r.completedOn;
   if (Array.isArray(r.journalDates)) {
     const dates = [...new Set(r.journalDates.filter(isISODate))].sort();
     if (dates.length) item.journalDates = dates;
@@ -1341,6 +1455,21 @@ function cleanItem(raw: unknown, fallbackStamp: string, taken: Set<string>): Pla
   const to = ref(r.carriedTo);
   if (to) item.carriedTo = to;
   return item;
+}
+
+function cleanReviewSnapshot(raw: unknown): PlanReviewSnapshot | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const record = raw as Record<string, unknown>;
+  const titles = (key: string): string[] => {
+    const value = record[key];
+    return Array.isArray(value) ? value.filter((title): title is string => typeof title === "string") : [];
+  };
+  const count = (value: unknown) => typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : 0;
+  return {
+    objectives: titles("objectives"), activities: titles("activities"), milestones: titles("milestones"),
+    remaining: titles("remaining"), deferred: titles("deferred"), carried: titles("carried"),
+    journalDays: count(record.journalDays), studyHours: count(record.studyHours), topics: count(record.topics),
+  };
 }
 
 function cleanPlan(raw: unknown, takenPlans: Set<string>): RoadmapPlan | null {
@@ -1389,19 +1518,30 @@ function cleanPlan(raw: unknown, takenPlans: Set<string>): RoadmapPlan | null {
     const v = str(r[k]);
     if (v) plan[k] = v;
   }
-  if (Array.isArray(r.objectives)) {
-    const list = r.objectives.map(str).filter((o): o is string => o !== undefined);
-    if (list.length) plan.objectives = list;
-  }
   if (Array.isArray(r.goalIds)) {
     const ids = [...new Set(r.goalIds.filter((g): g is string => typeof g === "string" && g !== ""))].sort();
     if (ids.length) plan.goalIds = ids;
   }
-  if (Array.isArray(r.items)) {
-    const taken = new Set<string>();
-    const items = r.items.map((it) => cleanItem(it, plan.createdAt, taken)).filter((it): it is PlanItem => it !== null);
-    if (items.length) plan.items = items;
+  const taken = new Set<string>();
+  const items = Array.isArray(r.items)
+    ? r.items.map((it) => cleanItem(it, plan.createdAt, taken)).filter((it): it is PlanItem => it !== null)
+    : [];
+  if (Array.isArray(r.objectives)) {
+    const titles = r.objectives.map(str).filter((title): title is string => title !== undefined);
+    if (level === "week") {
+      const occurrences = new Map<string, number>();
+      for (const title of titles) {
+        const occurrence = (occurrences.get(title) ?? 0) + 1;
+        occurrences.set(title, occurrence);
+        const textId = Array.from(title, (char) => char.codePointAt(0)?.toString(36)).join(".");
+        const id = `po_legacy_${textId}_${occurrence}`;
+        if (taken.has(id)) continue;
+        taken.add(id);
+        items.push({ id, kind: "objective", title, status: "notStarted", createdAt: plan.createdAt });
+      }
+    } else if (titles.length) plan.objectives = titles;
   }
+  if (items.length) plan.items = items;
   if (r.review && typeof r.review === "object") {
     const rv = r.review as Record<string, unknown>;
     const review: PlanReview = {};
@@ -1409,6 +1549,8 @@ function cleanPlan(raw: unknown, takenPlans: Set<string>): RoadmapPlan | null {
       const v = str(rv[k]);
       if (v) review[k] = v;
     }
+    const snapshot = cleanReviewSnapshot(rv.snapshot);
+    if (snapshot) review.snapshot = snapshot;
     if (typeof rv.reviewedAt === "string" && rv.reviewedAt) review.reviewedAt = rv.reviewedAt;
     if (Object.keys(review).length) plan.review = review;
   }

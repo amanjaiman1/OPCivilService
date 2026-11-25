@@ -21,12 +21,18 @@ the day touches in one update:
 - **Changing the date moves the entry** rather than copying it, along with its
   goal links. If the new date already has an entry, the composer warns that
   saving replaces it.
-- **Topics completed** are picked from the syllabus (`TopicPicker`). Free-text
-  topics still work, and ones typed on earlier days are offered again. A newly
-  finished syllabus topic moves from untouched to learning (never backwards),
-  and a tick box (on by default) puts it on the revision queue, first due the
-  next day and never in the past.
-- **Revision** ticked off is rescheduled, as before.
+- **Topics completed** lets you choose a subject, pick a matching syllabus
+  topic or add a custom topic under that subject. With one study subject in
+  the entry, the picker suggests that subject. You can still save a topic as
+  unassigned.
+- A subject-linked completion brings an untouched topic up to Learning and
+  schedules its first revision by default. The first due day is the day after
+  study, with today as the earliest due date for a backfill. Use the checkbox
+  to opt out before saving.
+- **Revision** logged against a queue item advances the schedule once per day.
+  A backfill records the past pass and keeps any later schedule.
+- **Your weekly targets** updates objectives, activities and milestones in the
+  Roadmap. A completed item links to the journal day when both are saved.
 - **Goals this day served** links the day to goals; the goal shows the day and
   its files.
 - The day's **first real entry marks the day accomplished** and plays the
@@ -48,6 +54,16 @@ links each one to the syllabus when the name matches exactly one topic, and
 leaves it as your own topic otherwise; it runs in the v12 store migration and
 on every snapshot pulled from the cloud. Nothing is guessed: "Introduction",
 which exists in several subjects, stays unlinked.
+
+New records resolve by ID first, then by a unique exact case-insensitive name
+within the selected subject. The comparison trims and collapses whitespace.
+If more than one topic matches, pick the intended record. New custom topics
+become part of that subject's syllabus and count in its totals. Syllabus and
+revision IDs keep their links when a topic is renamed. Queue IDs and history
+from older accounts are preserved when a unique old name can be linked.
+Removing a journal entry removes its journal evidence and its planning links.
+Syllabus progress and schedules already earned are retained. Removing a topic
+from the syllabus keeps the journal label and the revision history readable.
 
 ## Finding things
 

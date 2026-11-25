@@ -6,7 +6,7 @@ import { createBlankAccount, createAccountTemplate, type AccountSetup } from "./
 import { accountStorage, STORE_KEY, writeAppearance } from "./account/scope";
 import { normalizeProfile, normalizeSnapshot } from "./account/normalize";
 import { toISODate, fromISODate, uid } from "./utils";
-import { applyRevision, newRevisionItem, resolveTopicId } from "./revision";
+import { applyRevision, newRevisionItem, resolveTopicId, withPass, withPassOrigin } from "./revision";
 import {
   type ThemeMode,
   DEFAULT_THEME_MODE,
@@ -20,7 +20,13 @@ import { hoursFromTimes, isClock, MAX_SLEEP_HOURS } from "./sleep";
 import { pruneFiles } from "./files";
 import {
   type ChildPolicy,
+  type WeeklyTargetIntent,
+  applyWeeklyTargets,
+  buildPlanReviewSnapshot,
+  isArchived,
+  isCarried,
   canParent,
+  isISODate,
   carryForward as carryPlanItems,
   overlapDays,
   duplicatePlan as duplicatePlanContent,
@@ -38,7 +44,7 @@ import {
   withJournalDate,
   withStatus,
 } from "./roadmap";
-import { completedTopicsOf, normName } from "./topics";
+import { completedTopicsOf, customTopicId, normName, resolveCompletedTopics } from "./topics";
 import {
   type NotifySettings,
   type NotifyState,
@@ -211,6 +217,7 @@ interface ChronicleState extends ChronicleData {
     goalIds?: string[];
     /** Put newly finished syllabus topics on the revision queue. */
     scheduleRevision?: boolean;
+    weeklyTargets?: WeeklyTargetIntent[];
     /**
      * Files replaced in this edit, old id → new id. Goals and life days that
      * linked the old file follow it to the new one, once no journal day holds
@@ -220,6 +227,7 @@ interface ChronicleState extends ChronicleData {
   }) => JournalSaveResult;
   /** Deletes a day; files only it held go too. */
   deleteJournal: (date: ISODate) => void;
+  completeWeeklyTargets: (date: ISODate, changes: WeeklyTargetIntent[]) => void;
 
   /**
    * Mark a day accomplished. Returns true only when the day *became*
@@ -522,7 +530,7 @@ export interface SyncStamp {
  * has written the account, so an old cached app can't overwrite newer data.
  * Bump it whenever the shape of synced data changes.
  */
-export const STORE_VERSION = 17;
+export const STORE_VERSION = 18;
 
 let hydrationFailed = false;
 /** Whether the last rehydration from storage failed (unreadable or a migration threw). */
@@ -560,7 +568,7 @@ function maxStatus(a: TopicStatus, b: TopicStatus): TopicStatus {
  * `reviseTopic` applies to a single topic. Shared so that reviewing from the
  * Revision page and reviewing via a journal entry treat the syllabus identically.
  */
-function creditTopics(subjects: Subject[], topicIds: string[]): Subject[] {
+function creditTopics(subjects: Subject[], topicIds: string[], date = toISODate(new Date())): Subject[] {
   if (!topicIds.length) return subjects;
   const wanted = new Set(topicIds);
   return subjects.map((sub) =>
@@ -574,7 +582,7 @@ function creditTopics(subjects: Subject[], topicIds: string[]): Subject[] {
             return {
               ...t,
               revisionCount: t.revisionCount + 1,
-              lastTouched: toISODate(new Date()),
+              lastTouched: !t.lastTouched || t.lastTouched < date ? date : t.lastTouched,
               confidence,
               status: maxStatus(t.status, statusFromConfidence(confidence)),
             };
@@ -590,12 +598,31 @@ function withDate(list: ISODate[] | undefined, date: ISODate): ISODate[] {
   return [...set].sort();
 }
 
-/** The topics finished on a day that point at the syllabus, by topic id. */
-function linkedTopicIds(entry: JournalEntry | undefined): Set<string> {
-  const out = new Set<string>();
-  if (!entry) return out;
-  for (const c of completedTopicsOf(entry)) if (c.topicId) out.add(c.topicId);
-  return out;
+/** Journal passes advance the queue once per day. Backfills keep the latest schedule. */
+function journalRevisionChanges(entry: JournalEntry, revisions: RevisionItem[], subjects: Subject[]) {
+  const linked = new Map((entry.revisionSessions ?? []).flatMap((session) =>
+    session.revisionItemId ? [[session.revisionItemId, session] as const] : [],
+  ));
+  if (!linked.size) return { advanced: 0, revisions, subjects };
+  const credited: string[] = [];
+  let advanced = 0;
+  const next = revisions.map((item) => {
+    const session = linked.get(item.id);
+    if (!session || item.lastRevised === entry.date || item.passes?.includes(entry.date)) return item;
+    const remembered = session.recalled !== false;
+    const topicId = remembered ? resolveTopicId(item, subjects) : null;
+    if (topicId) credited.push(topicId);
+    advanced++;
+    const reviewed = item.lastRevised && item.lastRevised > entry.date
+      ? { ...item, passes: withPass(item, entry.date) }
+      : applyRevision(item, remembered, fromISODate(entry.date));
+    return withPassOrigin(reviewed, entry.date, "journal");
+  });
+  return {
+    advanced,
+    revisions: advanced ? next : revisions,
+    subjects: creditTopics(subjects, credited, entry.date),
+  };
 }
 
 export const useChronicle = create<ChronicleState>()(
@@ -716,7 +743,7 @@ export const useChronicle = create<ChronicleState>()(
           return { journal };
         }),
 
-      saveJournalEntry: ({ entry, previousDate, newFiles = [], goalIds, scheduleRevision = false, replaced = {} }) => {
+      saveJournalEntry: ({ entry, previousDate, newFiles = [], goalIds, scheduleRevision = true, weeklyTargets = [], replaced = {} }) => {
         const s = get();
         const result: JournalSaveResult = {
           isNewDay: !s.journal.some((j) => j.date === entry.date),
@@ -725,9 +752,11 @@ export const useChronicle = create<ChronicleState>()(
           revisionsScheduled: 0,
         };
         const moving = previousDate && previousDate !== entry.date ? previousDate : null;
-        const before =
-          s.journal.find((j) => j.date === entry.date) ??
-          (moving ? s.journal.find((j) => j.date === moving) : undefined);
+        const relatedEntries = s.journal.filter((record) => record.date === entry.date || record.date === moving);
+        const today = toISODate(new Date());
+        if (!isISODate(entry.date)) throw new Error("Pick a valid journal date.");
+        const previousTopics = relatedEntries.flatMap(completedTopicsOf);
+        const resolved = resolveCompletedTopics(completedTopicsOf(entry), s.subjects, previousTopics);
 
         /* ── files: one record per content hash ─────────────────── */
         let files = s.files;
@@ -753,6 +782,13 @@ export const useChronicle = create<ChronicleState>()(
         const idTaken = rest.some((j) => j.id === entry.id);
         const saved: JournalEntry = {
           ...entry,
+          ...(entry.completedTopics || entry.topicsCompleted ? {
+            completedTopics: resolved.completions.map((completion) => {
+              if (!completion.topicId) return completion;
+              const previous = previousTopics.find((candidate) => candidate.topicId === completion.topicId);
+              return { ...completion, id: previous?.id ?? `tc_${completion.topicId}` };
+            }),
+          } : {}),
           id: idTaken ? uid("j") : entry.id,
           ...(fileIds.length ? { fileIds } : {}),
         };
@@ -782,12 +818,12 @@ export const useChronicle = create<ChronicleState>()(
         let lifeLog = s.lifeLog;
 
         /* ── syllabus: newly finished topics are at least "learning" ─ */
-        const already = linkedTopicIds(before);
+        const already = new Set(previousTopics.flatMap((completion) => completion.topicId ? [completion.topicId] : []));
         const fresh = completedTopicsOf(saved).filter((c) => c.topicId && !already.has(c.topicId));
-        let subjects = s.subjects;
+        let subjects = resolved.subjects;
         if (fresh.length) {
           const ids = new Set(fresh.map((c) => c.topicId!));
-          subjects = s.subjects.map((sub) =>
+          subjects = subjects.map((sub) =>
             !sub.topics.some((t) => ids.has(t.id))
               ? sub
               : {
@@ -799,7 +835,7 @@ export const useChronicle = create<ChronicleState>()(
                     return {
                       ...t,
                       status,
-                      confidence: Math.max(t.confidence, STATUS_CONF[status]),
+                      confidence: status !== t.status ? Math.max(t.confidence, STATUS_CONF.learning) : t.confidence,
                       lastTouched:
                         !t.lastTouched || t.lastTouched < saved.date ? saved.date : t.lastTouched,
                     };
@@ -808,33 +844,36 @@ export const useChronicle = create<ChronicleState>()(
           );
         }
 
-        /* ── revision queue: schedule what was just finished ──── */
+        /* ── revision queue: canonical identity, with legacy name fallback ─ */
         let revisions = s.revisions;
         if (scheduleRevision && fresh.length) {
-          const queued = new Set(s.revisions.map((r) => `${r.subjectId}::${normName(r.topic)}`));
-          const today = toISODate(new Date());
+          const queued = new Set(revisions.map((item) => resolveTopicId(item, subjects)).filter(Boolean));
           const added: RevisionItem[] = [];
-          for (const c of fresh) {
-            const found = subjects.find((sub) => sub.topics.some((t) => t.id === c.topicId));
-            const topic = found?.topics.find((t) => t.id === c.topicId);
-            if (!found || !topic) continue;
-            const key = `${found.id}::${normName(topic.name)}`;
-            if (queued.has(key)) continue;
-            queued.add(key);
-            // First pass the day after it was finished, and never in the past.
+          revisions = revisions.map((item) => {
+            const topicId = item.topicId ?? resolveTopicId(item, subjects);
+            return topicId && !item.topicId && fresh.some((completion) => completion.topicId === topicId)
+              ? { ...item, topicId }
+              : item;
+          });
+          for (const completion of fresh) {
+            const subject = subjects.find((candidate) => candidate.id === completion.subjectId);
+            const topic = subject?.topics.find((candidate) => candidate.id === completion.topicId);
+            if (!subject || !topic || queued.has(topic.id)) continue;
+            queued.add(topic.id);
             const first = fromISODate(saved.date);
             first.setDate(first.getDate() + 1);
-            const due = toISODate(first) < today ? today : toISODate(first);
             added.push({
-              ...newRevisionItem(found.id, topic.name, fromISODate(saved.date)),
-              nextDue: due,
+              ...newRevisionItem(subject.id, topic.name, fromISODate(saved.date)),
+              id: `rev_topic_${topic.id}`,
+              topicId: topic.id,
+              nextDue: toISODate(first) < today ? today : toISODate(first),
             });
           }
-          if (added.length) {
-            result.revisionsScheduled = added.length;
-            revisions = [...s.revisions, ...added].sort((a, b) => a.nextDue.localeCompare(b.nextDue));
-          }
+          result.revisionsScheduled = added.length;
+          revisions = [...revisions, ...added].sort((a, b) => a.nextDue.localeCompare(b.nextDue));
         }
+        const passes = journalRevisionChanges(saved, revisions, subjects);
+        result.revisionsAdvanced = passes.advanced;
 
         /* ── a replaced file's links move to its replacement ──── */
         const held = new Set(journal.flatMap((j) => j.fileIds ?? []));
@@ -856,23 +895,30 @@ export const useChronicle = create<ChronicleState>()(
         lifeLog = pruned.lifeLog;
 
         // A day moved to another date takes its links from planned activities along.
-        const plans = moving ? retargetJournalDate(s.plans, moving, entry.date) : s.plans;
+        const updatedPlans = applyWeeklyTargets(s.plans, weeklyTargets, entry.date, true);
+        const plans = moving ? retargetJournalDate(updatedPlans, moving, entry.date) : updatedPlans;
 
         set({
           journal,
           files,
           goals,
           lifeLog,
-          subjects,
-          revisions,
+          subjects: passes.subjects,
+          revisions: passes.revisions,
           ...(plans !== s.plans ? { plans } : {}),
           ...(pruned.unusedPaths.length
             ? { fileTrash: [...new Set([...s.fileTrash, ...pruned.unusedPaths])] }
             : {}),
         });
-        result.revisionsAdvanced = get().applyJournalRevisions(saved);
         return result;
       },
+
+      completeWeeklyTargets: (date, changes) =>
+        set((s) => {
+          if (!isISODate(date) || date > toISODate(new Date())) throw new Error("Pick today or an earlier day.");
+          const plans = applyWeeklyTargets(s.plans, changes, date, s.journal.some((entry) => entry.date === date));
+          return plans !== s.plans ? { plans } : s;
+        }),
 
       deleteJournal: (date) =>
         set((s) => {
@@ -912,54 +958,35 @@ export const useChronicle = create<ChronicleState>()(
         set((s) => ({ mocks: s.mocks.filter((m) => m.id !== id) })),
 
       updateTopic: (subjectId, topicId, patch) =>
-        set((s) => ({
-          subjects: s.subjects.map((sub) =>
-            sub.id !== subjectId
-              ? sub
-              : {
-                  ...sub,
-                  topics: sub.topics.map((t) =>
-                    t.id === topicId ? { ...t, ...patch } : t,
-                  ),
-                },
-          ),
-        })),
+        set((s) => {
+          const sub = s.subjects.find((subject) => subject.id === subjectId);
+          const before = sub?.topics.find((topic) => topic.id === topicId);
+          if (!sub || !before) return {};
+          const updated = { ...before, ...patch, id: before.id };
+          return {
+            subjects: s.subjects.map((subject) => subject !== sub ? subject : {
+              ...subject,
+              topics: subject.topics.map((topic) => topic === before ? updated : topic),
+            }),
+            ...(updated.name !== before.name ? {
+              revisions: s.revisions.map((item) =>
+                item.subjectId === subjectId && resolveTopicId(item, [sub]) === topicId
+                  ? { ...item, topicId, topic: updated.name }
+                  : item),
+            } : {}),
+          };
+        }),
 
       addTopic: (subjectId, name) => {
-        const clean = name.trim();
-        if (!clean) return null;
-        /**
-         * Ids follow the seed's `<subjectId>-t<n>` convention, but `n` comes from
-         * a counter that has to clear every id already present — indexing off
-         * `topics.length` would collide the moment a topic in the middle has been
-         * deleted, and a duplicate id silently makes two topics move as one.
-         */
-        const sub = get().subjects.find((x) => x.id === subjectId);
-        if (!sub) return null;
-        let n = sub.topics.length;
-        let id = `${subjectId}-t${n}`;
-        while (sub.topics.some((t) => t.id === id)) {
-          n += 1;
-          id = `${subjectId}-t${n}`;
-        }
+        const clean = name.trim().replace(/\s+/g, " ");
+        const sub = get().subjects.find((subject) => subject.id === subjectId);
+        if (!clean || !sub) return null;
+        const id = customTopicId(subjectId, clean);
+        const existing = sub.topics.find((topic) => topic.id === id || normName(topic.name) === normName(clean));
+        if (existing) return existing.id;
+        const topic: Topic = { id, name: clean, status: "untouched", confidence: 0, revisionCount: 0 };
         set((s) => ({
-          subjects: s.subjects.map((x) =>
-            x.id !== subjectId
-              ? x
-              : {
-                  ...x,
-                  topics: [
-                    ...x.topics,
-                    {
-                      id,
-                      name: clean,
-                      status: "untouched" as TopicStatus,
-                      confidence: 0,
-                      revisionCount: 0,
-                    },
-                  ],
-                },
-          ),
+          subjects: s.subjects.map((subject) => subject === sub ? { ...subject, topics: [...subject.topics, topic] } : subject),
         }));
         return id;
       },
@@ -1450,9 +1477,16 @@ export const useChronicle = create<ChronicleState>()(
         set((s) => {
           const item = s.revisions.find((it) => it.id === id);
           if (!item) return {};
-          const revisions = s.revisions.map((it) =>
-            it.id === id ? applyRevision(it, remembered, new Date()) : it,
-          );
+          const at = new Date();
+          const date = toISODate(at);
+          if (item.lastRevised === date || item.passes?.includes(date)) {
+            if (item.journalPasses?.[date] !== "journal") return {};
+            return { revisions: s.revisions.map((it) => it !== item ? it : {
+              ...it, journalPasses: { ...it.journalPasses, [date]: "confirmed" },
+            }) };
+          }
+          const reviewed = applyRevision(item, remembered, at);
+          const revisions = s.revisions.map((it) => it === item ? withPassOrigin(reviewed, date, "confirmed") : it);
           // A successful recall also counts towards the syllabus topic, if the
           // item's free-text name resolves to one.
           const topicId = remembered ? resolveTopicId(item, s.subjects) : null;
@@ -1464,9 +1498,16 @@ export const useChronicle = create<ChronicleState>()(
       upsertRevision: (item) =>
         set((s) => {
           const idx = s.revisions.findIndex((x) => x.id === item.id);
+          const before = idx >= 0 ? s.revisions[idx] : undefined;
+          const linked = before?.topicId ? { ...item, subjectId: before.subjectId, topic: before.topic, topicId: before.topicId } : item;
+          const topicId = resolveTopicId(linked, s.subjects) ?? linked.topicId;
+          const next = topicId ? { ...linked, topicId } : linked;
           const revisions = [...s.revisions];
-          if (idx >= 0) revisions[idx] = item;
-          else revisions.push(item);
+          if (idx >= 0) revisions[idx] = next;
+          else {
+            if (topicId && revisions.some((existing) => resolveTopicId(existing, s.subjects) === topicId)) return {};
+            revisions.push(topicId ? { ...next, id: `rev_topic_${topicId}` } : next);
+          }
           revisions.sort((a, b) => a.nextDue.localeCompare(b.nextDue));
           return { revisions };
         }),
@@ -1474,46 +1515,11 @@ export const useChronicle = create<ChronicleState>()(
       deleteRevision: (id) =>
         set((s) => ({ revisions: s.revisions.filter((r) => r.id !== id) })),
 
-      /**
-       * The bridge from the Daily Journal to the revision queue: picking items in
-       * the composer records them on the entry, and saving the day advances their
-       * schedules here.
-       *
-       * Two things this has to get right. It schedules from the entry's own date
-       * rather than from now, so back-filling yesterday doesn't push the next pass
-       * a day late. And it is idempotent — an item already marked revised on that
-       * date is left alone, so editing and re-saving a day cannot walk the ladder
-       * forward again (which would silently push a topic from a 3-day interval out
-       * to 60 by re-saving five times).
-       */
       applyJournalRevisions: (entry) => {
-        const s = get();
-        const linked = (entry.revisionSessions ?? []).filter((r) => r.revisionItemId);
-        if (!linked.length) return 0;
-
-        const creditedTopics: string[] = [];
-        let advanced = 0;
-        const revisions = s.revisions.map((it) => {
-          const hit = linked.find((l) => l.revisionItemId === it.id);
-          if (!hit) return it;
-          if (it.lastRevised === entry.date) return it; // already counted for this day
-          const remembered = hit.recalled !== false;
-          advanced++;
-          if (remembered) {
-            const topicId = resolveTopicId(it, s.subjects);
-            if (topicId) creditedTopics.push(topicId);
-          }
-          return applyRevision(it, remembered, fromISODate(entry.date));
-        });
-
-        if (!advanced) return 0;
-        set({
-          revisions,
-          ...(creditedTopics.length
-            ? { subjects: creditTopics(s.subjects, creditedTopics) }
-            : {}),
-        });
-        return advanced;
+        const { revisions, subjects } = get();
+        const changes = journalRevisionChanges(entry, revisions, subjects);
+        if (changes.advanced) set({ revisions: changes.revisions, subjects: changes.subjects });
+        return changes.advanced;
       },
 
       upsertReview: (r) =>
@@ -1710,11 +1716,14 @@ export const useChronicle = create<ChronicleState>()(
       savePlanItem: (planId, item) =>
         set((s) => ({
           plans: s.plans.map((p) => {
-            if (p.id !== planId) return p;
+            if (p.id !== planId || isArchived(s.plans, p)) return p;
             const items = p.items ?? [];
             const before = items.find((i) => i.id === item.id);
             // A status change made in the form keeps the completion time honest.
-            const next = tidyItem(before && before.status !== item.status ? withStatus({ ...item, status: before.status }, item.status) : item);
+            if (before && isCarried(s.plans, before) && before.status !== item.status) return p;
+            const next = tidyItem(before?.status !== item.status
+              ? withStatus({ ...item, status: before?.status ?? "notStarted" }, item.status)
+              : { ...item, completedAt: before.completedAt, completedOn: before.completedOn });
             return {
               ...p,
               updatedAt: new Date().toISOString(),
@@ -1723,12 +1732,15 @@ export const useChronicle = create<ChronicleState>()(
           }),
         })),
 
-      deletePlanItem: (planId, itemId) => set((s) => ({ plans: removeItem(s.plans, planId, itemId) })),
+      deletePlanItem: (planId, itemId) => set((s) => {
+        const plan = s.plans.find((candidate) => candidate.id === planId);
+        return plan && !isArchived(s.plans, plan) ? { plans: removeItem(s.plans, planId, itemId) } : s;
+      }),
 
       setPlanItemStatus: (planId, itemId, status) =>
         set((s) => ({
           plans: s.plans.map((p) => {
-            if (p.id !== planId || !p.items?.some((i) => i.id === itemId && i.status !== status)) return p;
+            if (p.id !== planId || isArchived(s.plans, p) || !p.items?.some((i) => i.id === itemId && i.status !== status && !isCarried(s.plans, i))) return p;
             return {
               ...p,
               updatedAt: new Date().toISOString(),
@@ -1740,7 +1752,7 @@ export const useChronicle = create<ChronicleState>()(
       movePlanItem: (planId, itemId, delta) =>
         set((s) => ({
           plans: s.plans.map((p) => {
-            if (p.id !== planId || !p.items) return p;
+            if (p.id !== planId || !p.items || isArchived(s.plans, p)) return p;
             const items = moveItem(p.items, itemId, delta);
             return items === p.items ? p : { ...p, items, updatedAt: new Date().toISOString() };
           }),
@@ -1761,7 +1773,7 @@ export const useChronicle = create<ChronicleState>()(
       setItemJournalLink: (planId, itemId, date, linked) =>
         set((s) => ({
           plans: s.plans.map((p) => {
-            if (p.id !== planId || !p.items?.some((i) => i.id === itemId)) return p;
+            if (p.id !== planId || isArchived(s.plans, p) || !p.items?.some((i) => i.id === itemId)) return p;
             return {
               ...p,
               updatedAt: new Date().toISOString(),
@@ -1773,9 +1785,10 @@ export const useChronicle = create<ChronicleState>()(
       savePlanReview: (planId, review) =>
         set((s) => ({
           plans: s.plans.map((p) => {
-            if (p.id !== planId) return p;
+            if (p.id !== planId || isArchived(s.plans, p)) return p;
             const stamp = new Date().toISOString();
-            return tidyPlan({ ...p, review: { ...review, reviewedAt: stamp }, updatedAt: stamp });
+            const snapshot = buildPlanReviewSnapshot(s.plans, p, s.journal, toISODate(new Date(stamp)));
+            return tidyPlan({ ...p, review: { ...review, reviewedAt: stamp, snapshot }, updatedAt: stamp });
           }),
         })),
 
@@ -2060,6 +2073,9 @@ export const useChronicle = create<ChronicleState>()(
         // drafts and snapshots: all optional fields, so the records
         // themselves are untouched and read as they always did.
         if (version < 17 && !isCoachLog(state.coach)) state.coach = { decisions: [], briefings: [] };
+
+        // v17 -> v18: weekly objectives become actionable Roadmap items.
+        if (version < 18 && state.plans !== undefined) state.plans = normalizePlans(state.plans);
 
         return state as ChronicleState;
       },

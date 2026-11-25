@@ -11,7 +11,7 @@ a deletion anywhere is reflected everywhere the next time the screen draws.
 | Daily Journal (`/journal`) | Study hours by subject, topics finished, revision sessions, mocks and books of the day, the day's own notes | Syllabus, revision queue, roadmap (links) | Count habits itself |
 | Life Dashboard (`/wellbeing`) | Sleep, wake-up, bedtime, exercise, walking, running, meditation, water, screen time, weight | | |
 | Revision (`/revision`) | The spaced-repetition queue and each item's revision days (`passes`) | Syllabus | |
-| Roadmap (`/roadmap`) | Your yearly, monthly and weekly plans, their activities and milestones | Goals and journal days (references only) | Change a goal or a journal day |
+| Roadmap (`/roadmap`) | Your yearly, monthly and weekly plans, their objectives, activities, milestones and review evidence | Goals and journal days (references only) | Change a goal or a journal day |
 | Goals (`/goals`) | What you are chasing, targets, deadlines, goal milestones | Journal, mocks, revision, books, current affairs, mistakes, life, diary entry count (for a goal you set to count them) | |
 | My Habits (`/habits`) | Each habit's settings, your check-ins, and your corrections for a day | Journal, Life Dashboard, Revision, Roadmap, through the Habit Engine | Copy a record, or read free text |
 | Performance Review (`/performance-review`) | What you wrote about a period, and the figures it was completed with | Journal, Roadmap, goals, revision, habits, life, mocks | Read the diary |
@@ -30,7 +30,7 @@ events. Each has a stable id built from the record it comes from:
 | Hours on a subject in a journal day | `journal:<date>:study:<subjectId>` | `study` |
 | A topic finished in a journal day | `journal:<date>:topic:<topicId>` | `topic` |
 | A revision of a queue item on a day (Revision page or journal) | `revision:<itemId>:<date>` | `revisionPass` |
-| A journal revision session not tied to a queue item | `journal:<date>:revision:<n>` | `revisionPass` |
+| A journal revision session not tied to a queue item | `journal:<date>:revision:<subject and normalized name>` | `revisionPass` |
 | Minutes of a journal revision session | `journal:<date>:revision-minutes:<n>` | `revisionMinutes` |
 | A night's sleep, bedtime, wake-up | `life:<date>:sleep`, `:bedtime`, `:wake` | `sleep`, `bedtime`, `wake` |
 | Exercise, walk, run, meditation, water, screen time | `life:<date>:<field>` | one kind each |
@@ -40,6 +40,19 @@ Events are de-duplicated by id, so a revision logged in the journal and ticked
 on the Revision page is one pass. The layer is recomputed from the records each
 time; it is never stored. The Habit Engine, the Performance Review and the
 Study Coach all read it, so the three always agree.
+
+## Completing work once
+
+| Action | Records updated together |
+| --- | --- |
+| Finish a subject topic in Daily Journal or Daily Capture | Journal completion, syllabus progress and the optional revision schedule |
+| Log a linked revision | Journal session and revision history, which the shared activity layer counts once |
+| Tick weekly targets in Daily Capture | Original Roadmap items and optional links to the journal day |
+| Save a plan review | Account-owned reflections and a snapshot of the recorded period evidence |
+
+Goals are optional links from Roadmap. The Goals page groups results by the
+existing categories, with a category inferred from the metric for older
+goals. Views, search, deadlines and progress cards still use the same records.
 
 ## Dependency map
 

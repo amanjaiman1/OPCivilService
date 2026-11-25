@@ -31,7 +31,7 @@ do $$
 declare r record;
 begin
   select * into r from public.save_chronicle_state(
-    '{"profile":{"name":"A"},"journal":[{"date":"2026-11-01","totalHours":6,"reflection":"private A","fileIds":["f1"]}],"files":[{"id":"f1","name":"private notes.pdf"}],"plans":[{"id":"wk_a","level":"week","start":"2026-11-02","end":"2026-11-08","items":[{"id":"pa_a","kind":"activity","title":"private A plan","status":"notStarted"},{"id":"pa_done","kind":"activity","title":"private A done","notes":"private A note","status":"completed","completedAt":"2026-11-03T10:00:00Z","subjectId":"polity"}],"focus":"private A focus"}],"reflections":[{"id":"d1","date":"2026-11-01","title":"private A diary title","content":"private A diary","tags":["private"],"fileIds":["f1"]}],"reviews":[{"id":"rv1","type":"Weekly","startDate":"2026-10-26","endDate":"2026-11-01","answers":{"wentWell":"private A review"},"snapshot":{"studyHours":6}}],"habits":[{"id":"h1","name":"Daily study","description":"private A habit note","source":"journal","metric":"studyHours","target":6,"log":{}}],"coach":{"decisions":[{"id":"cd1","recId":"neglected:economy","status":"dismissed","title":"private A coach","fingerprint":"f","at":"2026-11-01T00:00:00Z"}],"briefings":[]}}'::jsonb, 0);
+    '{"profile":{"name":"A"},"journal":[{"date":"2026-11-01","totalHours":6,"reflection":"private A","fileIds":["f1"]}],"files":[{"id":"f1","name":"private notes.pdf"}],"plans":[{"id":"wk_a","level":"week","start":"2026-11-02","end":"2026-11-08","items":[{"id":"pa_a","kind":"activity","title":"private A plan","status":"notStarted"},{"id":"pa_done","kind":"activity","title":"private A done","notes":"private A note","status":"completed","completedAt":"2026-11-03T10:00:00Z","completedOn":"2026-11-02","subjectId":"polity"}],"focus":"private A focus"}],"reflections":[{"id":"d1","date":"2026-11-01","title":"private A diary title","content":"private A diary","tags":["private"],"fileIds":["f1"]}],"reviews":[{"id":"rv1","type":"Weekly","startDate":"2026-10-26","endDate":"2026-11-01","answers":{"wentWell":"private A review"},"snapshot":{"studyHours":6}}],"habits":[{"id":"h1","name":"Daily study","description":"private A habit note","source":"journal","metric":"studyHours","target":6,"log":{}}],"coach":{"decisions":[{"id":"cd1","recId":"neglected:economy","status":"dismissed","title":"private A coach","fingerprint":"f","at":"2026-11-01T00:00:00Z"}],"briefings":[]}}'::jsonb, 0);
   if not r.saved or r.version <> 1 then
     raise exception 'FAIL: first save for A should create version 1, got saved=% version=%', r.saved, r.version;
   end if;
@@ -285,7 +285,8 @@ begin
   end if;
   if jsonb_array_length(j -> 'plans' -> 0 -> 'items') <> 1
      or (j -> 'plans' -> 0 -> 'items' -> 0 ->> 'id') is distinct from 'pa_done'
-     or (j -> 'plans' -> 0 -> 'items' -> 0 ->> 'completedAt') is distinct from '2026-11-03T10:00:00Z' then
+     or (j -> 'plans' -> 0 -> 'items' -> 0 ->> 'completedAt') is distinct from '2026-11-03T10:00:00Z'
+     or (j -> 'plans' -> 0 -> 'items' -> 0 ->> 'completedOn') is distinct from '2026-11-02' then
     raise exception 'FAIL: dispatcher snapshot should carry the completed activity, and only it';
   end if;
   if (j -> 'plans' -> 0) ?| array['title', 'focus', 'objectives', 'notes', 'review', 'level', 'start', 'end']

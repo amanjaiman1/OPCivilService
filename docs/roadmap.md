@@ -9,8 +9,8 @@ Three rules run through it:
 1. **Nothing is planned for you.** A new account opens an empty Roadmap.
    Every plan in it is one the person made.
 2. **Progress comes only from planned activities.** A plan's percentage is
-   completed activities out of all its activities. Nothing is estimated, and
-   no other module's numbers are mixed in.
+   completed activities out of all its activities. Objectives and milestones
+   have their own counts.
 3. **Goals and the journal are pointed at, never changed.** Linking a goal or
    a journal day stores a reference. The goal's progress and the journal entry
    stay exactly as they were.
@@ -18,7 +18,7 @@ Three rules run through it:
 ## The record
 
 Plans live in the account's snapshot, under `plans` (`RoadmapPlan` in
-`src/lib/types.ts`). Activities and milestones live inside their plan.
+`src/lib/types.ts`). Objectives, activities and milestones live inside their plan.
 
 ```
 RoadmapPlan
@@ -27,15 +27,15 @@ RoadmapPlan
 ├─ year         year plans only
 ├─ title        optional; without one the period is the name ("January 2027")
 ├─ parentId     the plan it sits under (a month in a year; a week in a month or a year)
-├─ focus, objectives[], outcomes, notes
+├─ focus, objectives[] (year and month strategy), outcomes, notes
 ├─ goalIds[]    goals it works towards (references)
-├─ items[]      PlanItem: activities and milestones, in the order you set
-├─ review       wentWell, improve, nextPriorities, reviewedAt
+├─ items[]      PlanItem: objectives, activities and milestones, in the order you set
+├─ review       wentWell, improve, nextPriorities, reviewedAt, snapshot
 ├─ archivedAt   set when archived; the plan stays readable
 └─ createdAt, updatedAt
 
 PlanItem
-├─ kind         activity | milestone
+├─ kind         activity | objective | milestone
 ├─ title, description, notes
 ├─ status       notStarted | inProgress | completed | deferred
 ├─ priority     High | Medium | Low (activities; absent reads as Medium)
@@ -43,7 +43,7 @@ PlanItem
 ├─ subjectId, category
 ├─ goalId, goalMilestoneId   a goal it serves, and one of its milestones (references)
 ├─ journalDates[]            journal days deliberately linked to it
-├─ completedAt
+├─ completedAt, completedOn
 └─ carriedFrom, carriedTo    { planId, itemId } when carried forward
 ```
 
@@ -89,6 +89,7 @@ anything done.
   the next inside the same month counts where it ended up.
 - **Overdue** means open (not completed or deferred) and past its target date,
   or past the plan's last day when it has no date.
+- **Objectives** are individually actionable in weekly plans and have their own completion count.
 - **Milestones** are counted separately ("2 of 5 milestones reached"), never in
   the activity percentage.
 - Labels keep the two kinds of progress apart: plans say **Planned work done**;
@@ -97,7 +98,7 @@ anything done.
 
 ## Working with plans
 
-- **Create.** Only the period is needed. A new year can create its twelve
+- **Create.** Only the period is needed. Weekly objectives and milestones can be added in the creation form. Both can be completed or reopened in the plan. A new year can create its twelve
   months, and a new month its weeks, if you tick the box. Plans already made
   for those dates that stand alone can be brought in.
 - **Duplicate** copies a plan's own content to another period with new ids:
@@ -112,9 +113,9 @@ anything done.
   with it. Archived plans leave the current overview and lists ("Show
   archived" brings them back into view) and can be searched. Their activities
   open to be read but not changed, until the plan is restored.
-- **Carry forward** copies unfinished activities from a week or a month into
+- **Carry forward** copies unfinished activities and objectives from a week or a month into
   the next week's or month's plan (created blank if needed). Nothing is
-  carried unless you choose to. The copy is a new activity marked "From
+  carried unless you choose to. The copy keeps its item type marked "From
   …"; the original stays where it was, marked deferred and "Carried to …", so
   the record of what was planned when is never rewritten. "Bring it back here"
   undoes it while the copy is still untouched.
@@ -122,9 +123,11 @@ anything done.
 - **Find** searches titles, focus, objectives, notes and reviews, with filters
   for level, year, month, week, status (including overdue), priority, goal,
   subject and category.
-- **Review.** Each plan has its own weekly, monthly or yearly review: what was
-  completed, still open and carried forward (read from the activities), and
-  three questions to answer. It's stored on the plan.
+- **Review.** The plan and its children supply completed objectives and
+  activities, reached milestones, open work, deferred work and carry-forwards.
+  Journal totals use the plan's dates. Saving freezes the evidence and keeps
+  the optional reflection answers on the plan. The live view continues to
+  reflect later edits. Earlier reviews retain their saved text.
 
 ## Links to the rest of the app
 
@@ -134,10 +137,9 @@ anything done.
   activity never ticks off a goal milestone; the activity says when one is
   still open in Goals. Deleting a goal removes the references to it and nothing
   else.
-- **Journal.** A journal day is linked to an activity on purpose, from the
-  activity. Linking doesn't mark the activity done, and unlinking deletes
-  nothing. The journal day shows "Planned work done this day" for the
-  activities that link to it. Deleting a journal day removes its links; moving
+- **Journal.** A planning item can link to a journal day from its detail or
+  when explicitly completed in Daily Capture or the journal editor. Linking
+  from the item detail is just a reference. The journal day shows linked work. Deleting a journal day removes its links; moving
   an entry to another date moves them. A week's or month's page shows
   **Planned and recorded**: the planned activities by subject next to the
   hours the journal recorded on those dates, side by side and never combined.
@@ -182,9 +184,13 @@ anything done.
   the next time a device on this version syncs, because applying the cloud's
   copy never removes a key it leaves out. Tested in
   `supabase/tests/rls_isolation.sql`.
-- **The push dispatcher doesn't read plans.** No notification rule uses them,
-  so the same migration leaves `plans` out of the dispatcher's reader and the
-  15-minute schedule doesn't download them.
+- **Snapshot version 18.** Legacy weekly objective strings are converted in
+  order to incomplete items. Their identities are deterministic by exact text
+  and occurrence. A year or month keeps its strategic text. Local hydration,
+  cloud loads and the sync ancestor use the same conversion.
+- **Push reminders.** The dispatcher receives the calendar completion date and
+  timestamp for completed activities. The migration adds that field to the
+  existing private projection for Roadmap habits.
 
 ## The retired fixed plan
 

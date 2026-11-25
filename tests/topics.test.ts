@@ -86,7 +86,7 @@ test("the picker finds syllabus topics and topics saved on earlier days", () => 
   const saved = searchTopicOptions("drill", subjects, journal);
   assert.equal(saved.length, 1);
   assert.equal(saved[0].source, "saved");
-  assert.equal(saved[0].key, "custom:answer writing drill");
+  assert.equal(saved[0].key, 'custom:["polity","answer writing drill"]');
 
   assert.equal(searchTopicOptions("fund", subjects, journal, { exclude: new Set(["t-fr"]) }).length, 0);
   assert.ok(searchTopicOptions("revolt", subjects, journal, { subjectId: "polity" }).every((o) => o.subjectId === "polity"));

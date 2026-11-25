@@ -11,6 +11,7 @@ import {
   WEEKDAY_NAMES,
   addDays,
   blankPlan,
+  blankItem,
   carryable,
   formatSpan,
   isISODate,
@@ -152,7 +153,7 @@ export function PlanForm({
     setAlsoChildren(false);
     const parent = suggestedParent(plans, fresh);
     if (parent) fresh.parentId = parent;
-    setDraft({ ...fresh, title: draft.title, focus: draft.focus, objectives: draft.objectives, outcomes: draft.outcomes, notes: draft.notes, goalIds: draft.goalIds });
+    setDraft({ ...fresh, title: draft.title, focus: draft.focus, objectives: draft.objectives, items: draft.items, outcomes: draft.outcomes, notes: draft.notes, goalIds: draft.goalIds });
   }
 
   const patch = (p: Partial<RoadmapPlan>) => setDraft((d) => ({ ...d, ...p }));
@@ -205,6 +206,8 @@ export function PlanForm({
     const clean: RoadmapPlan = {
       ...draft,
       objectives: (draft.objectives ?? []).map((o) => o.trim()).filter(Boolean),
+      items: isNew ? draft.items?.filter((item) => item.title.trim()) : useChronicle.getState().plans.find((p) => p.id === draft.id)?.items,
+      review: isNew ? undefined : useChronicle.getState().plans.find((p) => p.id === draft.id)?.review,
       goalIds: [...new Set(draft.goalIds ?? [])].sort(),
     };
     if (!savePlan(clean)) {
@@ -498,7 +501,7 @@ export function PlanForm({
             />
           </Field>
 
-          <div>
+          {(isNew || draft.level !== "week") && <div>
             <p className="mb-2 text-[0.78rem] font-semibold tracking-snugg text-paper/60">
               Objectives<span className="font-normal text-paper/50"> · the few things this period is for</span>
             </p>
@@ -535,7 +538,31 @@ export function PlanForm({
                 <Plus className="h-3.5 w-3.5" /> Add an objective
               </button>
             )}
-          </div>
+          </div>}
+          {isNew && draft.level === "week" && (
+            <div className="space-y-2">
+              <p className="text-[0.78rem] font-semibold text-paper/70">Milestones</p>
+              {(draft.items ?? []).filter((item) => item.kind === "milestone").map((item, index) => (
+                <div key={item.id} className="flex items-center gap-2">
+                  <Input
+                    value={item.title}
+                    aria-label={`Milestone ${index + 1}`}
+                    placeholder="Name a checkpoint"
+                    maxLength={LIMITS.itemTitle}
+                    onChange={(event) => patch({ items: draft.items?.map((old) => old.id === item.id ? { ...old, title: event.target.value } : old) })}
+                  />
+                  <Button type="button" variant="ghost" size="sm" aria-label={`Remove milestone ${index + 1}`} onClick={() => patch({ items: draft.items?.filter((old) => old.id !== item.id) })}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+              {(draft.items?.length ?? 0) + objectives.length < LIMITS.items && (
+                <button type="button" onClick={() => patch({ items: [...(draft.items ?? []), blankItem("milestone", "")] })} className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent hover:underline">
+                  <Plus className="h-3.5 w-3.5" /> Add a milestone
+                </button>
+              )}
+            </div>
+          )}
 
           <Field label="Expected outcomes">
             <Textarea
@@ -548,10 +575,12 @@ export function PlanForm({
           </Field>
         </fieldset>
 
-        <GoalPicker goals={goals} value={draft.goalIds ?? []} onChange={(ids) => patch({ goalIds: ids })} multiple />
-        <p className="-mt-3 text-[0.7rem] text-paper/55">
-          Linking shows the goal here. Its progress is still measured in Goals; finishing planned work doesn&apos;t change it.
-        </p>
+        {goals.length > 0 && (
+          <details>
+            <summary className="mb-2 cursor-pointer text-sm font-semibold text-paper/75">Link goals (optional)</summary>
+            <GoalPicker goals={goals} value={draft.goalIds ?? []} onChange={(ids) => patch({ goalIds: ids })} multiple />
+          </details>
+        )}
 
         <Field label="Notes">
           <Textarea

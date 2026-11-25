@@ -8,7 +8,7 @@ closing with unsaved edits asks first and keeps them as a draft. The journal's
 
 | Tab | What it edits | Saved through |
 |---|---|---|
-| Day Update | the day's journal entry (study, topics, revision, mood, notes, files, more details) | `saveJournalEntry` |
+| Day Update | the day's journal entry and weekly targets | `saveJournalEntry` or `completeWeeklyTargets` |
 | Life | the day's Life Dashboard readings (only the tracked fields) | `upsertLifeEntry` / `deleteLifeEntry` |
 | Goals | the account's own goals: a new total, milestones, status, a note, and "Worked on this" (links the journal day) | `logGoalProgress`, `toggleGoalMilestone`, `setGoalStatus`, `addGoalNote`, `setGoalJournalDates` |
 | Habit | manual check-ins; connected habits are shown as the Habit Engine reads them | `toggleHabit` |
@@ -40,6 +40,23 @@ is in the menu at the top left. Until today is logged the button has a soft,
 breathing halo; once it is, it carries a check. In the demo, /journal opens
 without the form so the guide can talk the visitor through it first.
 
+## Weekly targets
+
+Day Update groups the unarchived weekly plans whose saved dates cover the
+selected day. Dated work for that day appears first, followed by overdue
+work, undated weekly work and upcoming milestones within the plan. Overlapping
+weeks keep their own headings. Deferred and carried originals are excluded.
+A matching topic can highlight an objective. Checking it is what requests
+completion.
+
+Planning selections are kept with the day's draft and restored after a reload.
+Saving writes the desired state to each original Roadmap item. A status or
+target changed on another device may require reselecting that item. A change
+already applied elsewhere is safe to retry. If a journal is saved at the same
+time, the link and completion are saved together. A planning-only save uses
+an existing entry when available and can otherwise finish without creating a
+journal entry. The completion day comes from the date selected in Daily Capture.
+
 ## No new data
 
 Daily Capture stores nothing of its own. The forms are the same components
@@ -56,7 +73,8 @@ with changes, in this order: journal entry, life entry (it mirrors bedtime and
 wake-up onto the journal), goals, check-ins. Each section succeeds or fails on
 its own; failed sections keep their edits and show why. It then waits for the
 cloud (`flush`) and the header says whether the changes are synced, still on
-their way, or kept on this device while offline.
+their way, or kept on this device while offline. If both local storage and sync
+fail, Capture stays open and allows the account snapshot to be retried.
 
 - If the day's entry or readings changed on another device or tab after
   editing began, saving asks before replacing them.

@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import type { ISODate, JournalEntry, LifeEntry } from "@/lib/types";
+import { didAccountSnapshotWriteFail } from "@/lib/account/scope";
 import { useChronicle } from "@/lib/store";
 import { useNow } from "@/lib/hooks";
 import { habitContext, habitsMovedOn, movedSummary, summarizeToday, todayHabits } from "@/lib/habit-engine";
@@ -101,7 +102,7 @@ interface SaveOutcome {
   results: Partial<Record<CaptureSection, SectionResult>>;
   goalErrors: Record<string, string>;
   /** Where the saved changes are: in the account, still on their way, or kept on this device. */
-  cloud: "synced" | "pending" | "device" | null;
+  cloud: "synced" | "pending" | "device" | "memory" | null;
 }
 
 const message = (e: unknown) => (e instanceof Error && e.message ? e.message : "Something went wrong while saving.");
@@ -215,6 +216,7 @@ export function CaptureWorkspace({
     habit: habitIdsChanged.length > 0,
   };
   const anyDirty = dirty.day || dirty.life || dirty.goals || dirty.habit;
+  const waitingForStorage = outcome?.cloud === "memory";
   const ready = loaded === date && journalEd.base.date === date && lifeEd.draft.date === date;
 
   // A day nobody is editing follows its saved records, e.g. when another device syncs.
@@ -239,7 +241,7 @@ export function CaptureWorkspace({
 
   const persistRef = useRef<() => void>(() => {});
   persistRef.current = () => {
-    if (!ready) return;
+    if (!ready || ((waitingForStorage || savingRef.current) && !anyDirty)) return;
     if (!anyDirty) return writeDraft(accountId, date, null);
     const pick = <T,>(ids: string[], from: Record<string, T>) => Object.fromEntries(ids.map((id) => [id, from[id]]));
     writeDraft(accountId, date, {
@@ -262,7 +264,7 @@ export function CaptureWorkspace({
     [],
   );
   useEffect(() => {
-    if (!anyDirty && !journalEd.uploading) return;
+    if (!anyDirty && !waitingForStorage && !journalEd.uploading) return;
     const onUnload = (e: BeforeUnloadEvent) => {
       persistRef.current();
       e.preventDefault();
@@ -270,7 +272,7 @@ export function CaptureWorkspace({
     };
     window.addEventListener("beforeunload", onUnload);
     return () => window.removeEventListener("beforeunload", onUnload);
-  }, [anyDirty, journalEd.uploading]);
+  }, [anyDirty, waitingForStorage, journalEd.uploading]);
 
   const otherDrafts = useMemo(
     () => (loaded ? draftDates(accountId).filter((d) => d !== date) : []),
@@ -316,12 +318,12 @@ export function CaptureWorkspace({
   const deferredDraft = useDeferredValue(journalEd.draft);
   const { blocks, completedTopics, revisionSessions } = deferredDraft;
   const previewJournal = useMemo(() => {
-    if (!journalEd.dirty) return journal;
+    if (!journalEd.entryDirty) return journal;
     const p = prepareJournalEntry({ ...deferredDraft, date }, today);
     return p.entry ? [...journal.filter((j) => j.date !== date), p.entry].sort(byDate) : journal;
     // Only what the engine reads from an entry rebuilds the preview.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [journal, journalEd.dirty, blocks, completedTopics, revisionSessions, date, today]);
+  }, [journal, journalEd.entryDirty, blocks, completedTopics, revisionSessions, date, today]);
   const previewLife = useMemo(() => {
     if (!lifeEd.dirty) return lifeLog;
     const rest = lifeLog.filter((l) => l.date !== date);
@@ -399,7 +401,7 @@ export function CaptureWorkspace({
   /* ── Save All Changes ───────────────────────────────────────── */
 
   const saveAll = useCallback(async () => {
-    if (savingRef.current || !anyDirty) return;
+    if (savingRef.current || (!anyDirty && !waitingForStorage)) return;
     if (journalEd.uploading) {
       toast({ title: "Files are still uploading", description: "Save once they've finished.", tone: "error" });
       return;
@@ -413,24 +415,31 @@ export function CaptureWorkspace({
     let journalSaved = false;
 
     try {
+      if (waitingForStorage) useChronicle.setState({});
+      if (anyDirty) persistRef.current();
       // 1. The journal entry, with its goal links, files, topics and revisions.
       if (dirty.day) {
         try {
-          const prepared = prepareJournalEntry({ ...journalEd.draft, date }, today);
-          if (!prepared.entry) throw new Error(prepared.error);
-          const latest = s().journal.find((j) => j.date === date) ?? null;
-          if (!sameRecord(latest, baseRef.current.journal)) {
-            const ok = await confirm({
-              title: "This day's entry changed elsewhere",
-              description: `${formatDate(date)} was updated on another device or tab after you started. Saving replaces that version with yours.`,
-              confirmLabel: "Save mine",
-              cancelLabel: "Not now",
-            });
-            if (!ok) throw new Error("Not saved, so the other version stays. Review the entry and save again.");
+          if (!journalEd.entryDirty) {
+            s().completeWeeklyTargets(date, journalEd.weeklyTargets);
+            results.day = { ok: true };
+          } else {
+            const prepared = prepareJournalEntry({ ...journalEd.draft, date }, today);
+            if (!prepared.entry) throw new Error(prepared.error);
+            const latest = s().journal.find((j) => j.date === date) ?? null;
+            if (!sameRecord(latest, baseRef.current.journal)) {
+              const ok = await confirm({
+                title: "This day's entry changed elsewhere",
+                description: `${formatDate(date)} was updated on another device or tab after you started. Saving replaces that version with yours.`,
+                confirmLabel: "Save mine",
+                cancelLabel: "Not now",
+              });
+              if (!ok) throw new Error("Not saved, so the other version stays. Review the entry and save again.");
+            }
+            earned = commitJournalEntry(journalEd, prepared.entry, { isEdit: Boolean(latest) }).celebration;
+            journalSaved = true;
+            results.day = { ok: true };
           }
-          earned = commitJournalEntry(journalEd, prepared.entry, { isEdit: Boolean(latest) }).celebration;
-          journalSaved = true;
-          results.day = { ok: true };
         } catch (e) {
           results.day = { ok: false, message: message(e) };
           journalEd.setError(message(e));
@@ -512,18 +521,22 @@ export function CaptureWorkspace({
       const list = Object.entries(results) as [CaptureSection, SectionResult][];
       const okCount = list.filter(([, r]) => r.ok).length;
       let cloud: SaveOutcome["cloud"] = null;
+      if (okCount || waitingForStorage) {
+        const synced = mode === "cloud" && await flush(10_000);
+        cloud = synced ? "synced" : didAccountSnapshotWriteFail() ? "memory" : mode === "cloud" ? "pending" : "device";
+      }
       setOutcome({ at: new Date(), results, goalErrors, cloud });
-      if (okCount) {
-        cloud = mode === "cloud" ? ((await flush(10_000)) ? "synced" : "pending") : "device";
-        setOutcome({ at: new Date(), results, goalErrors, cloud });
+      if (cloud === "memory") {
+        toast({ title: "Couldn’t save these changes", description: "Your changes are still open. Retry before closing this page.", tone: "error" });
+        return;
       }
 
       const failedNames = list.filter(([, r]) => !r.ok).map(([k]) => LABEL[k]);
       if (!failedNames.length) {
-        const moved = movedSummary(habitsMovedOn(after.habits, habitContext(after, today), date, ["journal", "life", "revision"]));
+        const moved = movedSummary(habitsMovedOn(after.habits, habitContext(after, today), date, ["journal", "life", "revision", "roadmap"]));
         toast({
           title: `${formatDate(date)} saved`,
-          description: [list.map(([k]) => LABEL[k]).join(", ") + " saved.", moved].filter(Boolean).join(" "),
+          description: [list.length ? list.map(([k]) => LABEL[k]).join(", ") + " saved." : undefined, moved].filter(Boolean).join(" "),
         });
       } else {
         toast({
@@ -543,7 +556,7 @@ export function CaptureWorkspace({
       savingRef.current = false;
       setSaving(false);
     }
-  }, [anyDirty, journalEd, lifeEd, dirty.day, dirty.life, dirty.goals, dirty.habit, date, today, confirm, goalIdsChanged, goalDrafts, linkDiff, habitDrafts, resetJournal, loadLife, mode, flush, toast, accountId, onCelebrate, onClose]);
+  }, [anyDirty, waitingForStorage, journalEd, lifeEd, dirty.day, dirty.life, dirty.goals, dirty.habit, date, today, confirm, goalIdsChanged, goalDrafts, linkDiff, habitDrafts, resetJournal, loadLife, mode, flush, toast, accountId, onCelebrate, onClose]);
 
   const discardAll = useCallback(async () => {
     const ok = await confirm({
@@ -626,7 +639,7 @@ export function CaptureWorkspace({
             onDraft={onGoalDraft}
             links={journalEd.goalIds}
             onLinks={setGoalIds}
-            canLink={Boolean(savedEntry) || journalEd.dirty}
+            canLink={Boolean(savedEntry) || journalEd.entryDirty}
             errors={outcome?.goalErrors ?? {}}
           />
         );
@@ -648,12 +661,14 @@ export function CaptureWorkspace({
 
   const requestClose = useCallback(async () => {
     if (savingRef.current) return;
-    if (anyDirty || journalEd.uploading) {
+    if (anyDirty || waitingForStorage || journalEd.uploading) {
       const ok = await confirm({
         title: "Close without saving?",
         description: journalEd.uploading
           ? "Files are still uploading. Closing stops them; everything else stays as a draft."
-          : `Your changes for ${formatDate(date)} stay as a draft and come back when you open Daily Capture again.`,
+          : waitingForStorage
+            ? "Your changes could only be held in this open page. Try saving again before closing."
+            : `Your changes for ${formatDate(date)} stay as a draft and come back when you open Daily Capture again.`,
         confirmLabel: "Close",
         cancelLabel: "Keep editing",
       });
@@ -661,7 +676,7 @@ export function CaptureWorkspace({
       persistRef.current();
     }
     onClose();
-  }, [anyDirty, journalEd.uploading, confirm, date, onClose]);
+  }, [anyDirty, waitingForStorage, journalEd.uploading, confirm, date, onClose]);
 
   const footer = (
     <>
@@ -676,7 +691,7 @@ export function CaptureWorkspace({
       <Button variant="ghost" onClick={() => void requestClose()} disabled={saving}>
         Close
       </Button>
-      <SaveAllButton saving={saving} disabled={!anyDirty} onClick={() => void saveAll()} />
+      <SaveAllButton saving={saving} disabled={!anyDirty && !waitingForStorage} onClick={() => void saveAll()} />
     </>
   );
 
@@ -695,7 +710,7 @@ export function CaptureWorkspace({
           <div>
             <WeekStrip date={date} today={today} logged={loggedDays} waiting={waitingDays} onPick={changeDate} />
             <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-1.5">
-              <SaveStatus saving={saving} anyDirty={anyDirty} outcome={outcome} failures={failures} mode={mode} sync={sync} onRetry={() => (anyDirty ? void saveAll() : syncNow())} />
+              <SaveStatus saving={saving} anyDirty={anyDirty} outcome={outcome} failures={failures} mode={mode} sync={sync} onRetry={() => (anyDirty || waitingForStorage ? void saveAll() : syncNow())} />
               <div className="flex items-center gap-2.5" role="group" aria-label={date === today ? "Today's progress" : "Progress for this day"}>
                 <div className="flex gap-1" aria-hidden>
                   {SECTIONS.map((s) => (
@@ -801,6 +816,11 @@ function SaveStatus({
   if (saving) {
     icon = <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />;
     text = outcome ? "Saving to your account…" : "Saving…";
+  } else if (outcome?.cloud === "memory") {
+    tone = "text-danger";
+    icon = <AlertTriangle className="h-3.5 w-3.5" aria-hidden />;
+    text = "Couldn’t save to this device or account";
+    retry = true;
   } else if (failures.length) {
     tone = "text-danger";
     icon = <AlertTriangle className="h-3.5 w-3.5" aria-hidden />;

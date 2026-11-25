@@ -122,6 +122,8 @@ export interface SyncTransport {
 
 export interface LocalStoreAdapter {
   read(): Snapshot;
+  /** Project old records into the current merge shape before comparing edits. */
+  prepareMerge?(snapshot: Snapshot): Snapshot;
   /**
    * Replaces the local copy with `next` (or leaves it, when null) and records,
    * in the same write, the cloud version it now descends from.
@@ -498,8 +500,18 @@ export class SyncEngine {
     }
     const local = this.o.store.read();
     const prefer = isBlankSnapshot(local) ? "remote" : "local";
-    const { value } = mergeTwoWay(local, this.base.data, prefer);
+    const { value } = this.mergeTwoWay(local, this.base.data, prefer);
     this.writeLocal(value, local, this.base.version);
+  }
+
+  private mergeThreeWay(base: Snapshot, local: Snapshot, remote: Snapshot) {
+    const prepare = this.o.store.prepareMerge;
+    return prepare ? merge3(prepare(base), prepare(local), prepare(remote)) : merge3(base, local, remote);
+  }
+
+  private mergeTwoWay(local: Snapshot, remote: Snapshot, prefer: "local" | "remote") {
+    const prepare = this.o.store.prepareMerge;
+    return prepare ? mergeTwoWay(prepare(local), prepare(remote), prefer) : mergeTwoWay(local, remote, prefer);
   }
 
   /**
@@ -514,7 +526,7 @@ export class SyncEngine {
 
     if (this.base) {
       if (deepEqual(local, this.base.data)) merged = doc.data;
-      else ({ value: merged, conflicts } = merge3(this.base.data, local, doc.data));
+      else ({ value: merged, conflicts } = this.mergeThreeWay(this.base.data, local, doc.data));
     } else if (this.pristine && !this.legacy) {
       // A blank, unstamped copy: nothing here to keep.
       merged = doc.data;
@@ -525,7 +537,7 @@ export class SyncEngine {
       merged = local;
     } else {
       // No common ancestor: keep everything from both, the cloud's wins on a clash.
-      ({ value: merged, conflicts } = mergeTwoWay(local, doc.data, "remote"));
+      ({ value: merged, conflicts } = this.mergeTwoWay(local, doc.data, "remote"));
     }
 
     this.guardRemoval(local, merged);
@@ -594,8 +606,8 @@ export class SyncEngine {
     const local = this.o.store.read();
     let merged: Snapshot;
     let conflicts: MergeConflict[] = [];
-    if (this.base) ({ value: merged, conflicts } = merge3(this.base.data, local, doc.data));
-    else ({ value: merged, conflicts } = mergeTwoWay(local, doc.data, this.legacy ? "local" : "remote"));
+    if (this.base) ({ value: merged, conflicts } = this.mergeThreeWay(this.base.data, local, doc.data));
+    else ({ value: merged, conflicts } = this.mergeTwoWay(local, doc.data, this.legacy ? "local" : "remote"));
     this.guardRemoval(local, merged);
     await this.commit({ version: doc.version, data: doc.data }, merged, local);
     this.recordConflicts(conflicts, doc.version);
@@ -660,7 +672,7 @@ export class SyncEngine {
     }
     if (this.isOutdated(doc)) return;
     const local = this.o.store.read();
-    const { value, conflicts } = mergeTwoWay(local, doc.data, "remote");
+    const { value, conflicts } = this.mergeTwoWay(local, doc.data, "remote");
     this.report("hold_kept_cloud", doc.version, { removed: hold.summary.removed });
     await this.commit({ version: doc.version, data: doc.data }, value, local);
     this.recordConflicts(conflicts, doc.version);

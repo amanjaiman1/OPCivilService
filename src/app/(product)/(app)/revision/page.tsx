@@ -600,17 +600,19 @@ export default function RevisionPage() {
           <Field label="Topic">
             <Input
               value={draft.topic}
-              onChange={(e) => setDraft({ ...draft, topic: e.target.value })}
+              readOnly={Boolean(draft.topicId)}
+              onChange={(e) => setDraft({ ...draft, topic: e.target.value, topicId: undefined })}
               placeholder="e.g. Fundamental Rights"
             />
           </Field>
           <Field
             label="Subject"
-            hint="Matching a topic name in the syllabus lets a recall also raise that topic's confidence."
+            hint={draft.topicId ? "Edit the linked topic in Subject Progress." : "A unique syllabus match also receives recall credit."}
           >
             <Select
               value={draft.subjectId}
-              onChange={(e) => setDraft({ ...draft, subjectId: e.target.value })}
+              disabled={Boolean(draft.topicId)}
+              onChange={(e) => setDraft({ ...draft, subjectId: e.target.value, topicId: undefined })}
             >
               <option value="">Choose a subject…</option>
               {subjects.map((s) => (
