@@ -19,8 +19,8 @@ export function generateStaticParams() {
   return POSTS.map((p) => ({ slug: p.slug }));
 }
 
-export function generateMetadata({ params }: { params: { slug: string } }): Metadata {
-  const post = findPost(params.slug);
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const post = findPost((await params).slug);
   if (!post) return {};
   return pageMetadata(
     { path: postPath(post.slug), title: post.title, description: post.description },
@@ -28,8 +28,8 @@ export function generateMetadata({ params }: { params: { slug: string } }): Meta
   );
 }
 
-export default function GuidePage({ params }: { params: { slug: string } }) {
-  const post = findPost(params.slug);
+export default async function GuidePage({ params }: { params: Promise<{ slug: string }> }) {
+  const post = findPost((await params).slug);
   const body = post ? BODIES[post.slug] : undefined;
   if (!post || !body) notFound();
   const { Body, toc } = body;

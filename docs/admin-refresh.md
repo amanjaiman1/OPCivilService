@@ -184,3 +184,8 @@ failed lookup shows as Visits failing rather than as "not recorded".
   load throughout. Scenario 27: a Moderator's refresh asks only for what the
   role covers, and an account without a role gets 403 from every address.
   Scenario 28: a phone, and all three themes.
+
+The attention summary shares the Reviews and Feedback live signals and the
+Refresh Data control. Acknowledgment sends the displayed section cursor, so
+it cannot acknowledge a later event. Resource Usage refreshes on opening or
+explicit Refresh Data; it does not aggregate on each student sync.

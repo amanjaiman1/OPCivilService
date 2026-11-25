@@ -29,6 +29,8 @@ import type { Permission } from "./roles";
 /* ── what there is to refresh ─────────────────────────────────── */
 
 export const ADMIN_RESOURCE_IDS = [
+  "attention",
+  "resource-usage",
   "overview",
   "users",
   "visits",
@@ -57,6 +59,8 @@ export interface AdminResource {
 
 /** Every resource, in the order the status panel lists them. A new module adds one line here. */
 export const ADMIN_RESOURCES: readonly AdminResource[] = [
+  { id: "attention", label: "Attention", covers: "New updates and work waiting for action", permission: "admin.access" },
+  { id: "resource-usage", label: "Resource usage", covers: "Snapshot, attachment and transfer measurements", permission: "analytics.read" },
   { id: "overview", label: "Overview", covers: "Figures from every module", permission: "admin.access" },
   { id: "users", label: "Users", covers: "Accounts, sign-ins and suspensions", permission: "users.read" },
   { id: "visits", label: "Visits", covers: "Who is on the site, and when each account came and went", permission: "users.read", via: "users" },
@@ -79,6 +83,10 @@ export function adminResourceOf(path: string): AdminResourceId | null {
   switch (path.split(/[/?]/)[0]) {
     case "me":
       return "role";
+    case "attention":
+      return "attention";
+    case "resource-usage":
+      return "resource-usage";
     case "overview":
       return "overview";
     case "users":

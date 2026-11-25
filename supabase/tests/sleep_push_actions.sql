@@ -58,8 +58,11 @@ begin
     or snapshot #>> '{lifeLog,0,sleepHours}' is not null
   then raise exception 'Sleep write lost unrelated data or invented readings'; end if;
   perform set_config('request.jwt.claim.sub', owner::text, true);
-  select status into result from public.chronicle_save(snapshot, current_version, 0, 'stale fixture');
+  select status into result from public.chronicle_save(snapshot, current_version, 19, 'stale fixture');
   if result <> 'conflict' then raise exception 'An older snapshot version can overwrite the background save'; end if;
+
+  select status into result from public.chronicle_save(snapshot, current_version + 1, 18, 'old fixture');
+  if result <> 'outdated' then raise exception 'Old app could overwrite new sleep metadata'; end if;
 
   delete from public.chronicle_push_subscriptions where id = '00000000-0000-4000-8000-000000000032';
   if public.chronicle_record_push_bedtime('one') <> 'unavailable' then

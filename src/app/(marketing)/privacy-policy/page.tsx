@@ -127,8 +127,7 @@ export default function PrivacyPolicyPage() {
               your mind. What you wrote in &ldquo;What should we improve?&rdquo; is never published.
             </p>
             <p>
-              Once you can write a review, the dashboard may ask you to. If you answer &ldquo;Later&rdquo; or &ldquo;No
-              thanks&rdquo;, we store that answer and when you gave it, so you aren&apos;t asked again too soon, or at all.
+              Once you can write a review, the app may invite you when you open or return to it. We record the last invitation and your postponement or dismissal so it follows your account across devices.
             </p>
             <h3>The interactive demo</h3>
             <p>
@@ -142,6 +141,13 @@ export default function PrivacyPolicyPage() {
             <p>
               When we post an announcement in the app, we record whether you have read or dismissed it, so it doesn&apos;t
               keep coming back, on any of your devices.
+            </p>
+            <h3>Service usage measurements</h3>
+            <p>
+              To plan server and storage capacity, authorized administrators can see the size of an account&apos;s synced
+              record and attachments, and daily estimates of sync transfer from supported app versions. The measurements
+              contain byte counts and request outcomes. They do not include the contents of entries or files.
+              Per-account sync measurements are retained for up to 35 days under daily cleanup and are removed with the account.
             </p>
             <h3>Technical logs</h3>
             <p>

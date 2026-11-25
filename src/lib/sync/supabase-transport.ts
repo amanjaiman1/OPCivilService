@@ -1,3 +1,4 @@
+import { estimateSnapshotBytes, syncUsage } from "./usage";
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import {
   SyncError,
@@ -123,6 +124,7 @@ export function createSupabaseTransport(
   accountId: string,
   options: TransportOptions,
 ): SyncTransport {
+  const measure = syncUsage(client, accountId);
   async function assertAccount(): Promise<void> {
     const { data } = await client.auth.getSession();
     const id = data.session?.user.id;
@@ -165,6 +167,7 @@ export function createSupabaseTransport(
         .eq("user_id", accountId)
         .retry(false)
         .maybeSingle();
+      measure("pull", error ? "failure" : "success", estimateSnapshotBytes(data?.data));
       if (error) throw classify(error, status);
       if (!data) return null;
       assertOwner(data);
@@ -183,6 +186,8 @@ export function createSupabaseTransport(
         p_schema: options.schema,
         p_device: options.device(),
       });
+      const outcome = firstRow(data)?.status;
+      measure("save", outcome === "conflict" ? "conflict" : !error && outcome === "saved" ? "success" : "failure", estimateSnapshotBytes(snapshot));
       if (error) throw classify(error, status);
       return saveOutcomeOf(data);
     },
@@ -195,8 +200,9 @@ export function createSupabaseTransport(
         p_device: options.device(),
         p_intent: intent,
       });
-      if (error) throw classify(error, status);
       const row = firstRow(data);
+      measure("save", !error && (row?.status === "created" || row?.status === "exists") ? "success" : "failure", estimateSnapshotBytes(snapshot));
+      if (error) throw classify(error, status);
       if (!row) throw new SyncError("The cloud didn't answer.", "server");
       if (row.status === "created" || row.status === "exists") return { status: row.status, head: headOf(row) };
       if (row.status === "needs_recovery") {
@@ -214,6 +220,8 @@ export function createSupabaseTransport(
         p_schema: options.schema,
         p_device: options.device(),
       });
+      const outcome = firstRow(data)?.status;
+      measure("save", outcome === "conflict" ? "conflict" : !error && outcome === "saved" ? "success" : "failure", estimateSnapshotBytes(snapshot));
       if (error) throw classify(error, status);
       return saveOutcomeOf(data);
     },

@@ -73,6 +73,8 @@ export default function GlobalError({ error }: { error: Error & { digest?: strin
             <button type="button" className="btn primary" onClick={() => window.location.reload()}>
               Reload
             </button>
+            {/* Use a full navigation because the app router itself may have failed. */}
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
             <a className="btn ghost" href="/">
               Go to the home page
             </a>

@@ -580,3 +580,14 @@ Credentials expire at most seven elapsed hours after dispatch and are only usabl
 until 04:00 local time for the same night. The database uses the request receipt
 time and verifies that the subscription still belongs to the same account.
 See the [Phase 03 report](transformation/PHASE_03_REPORT.md) for platform verification.
+
+### First study entry
+
+After completing setup, a student with no recorded study hours, saved mock,
+or explicit revision pass can see a first-entry reminder during the first
+seven days. It uses the journal reminder hour and opens Daily Capture. It
+is limited to one interruption during that window and respects the journal
+mute, quiet hours and delivery controls. A synced meaningful entry removes
+it from evaluation. Home can show the same guidance without browser
+notification permission. Scheduled push filters suspended accounts and pauses
+if the privacy-trimmed snapshot lookup is unavailable.

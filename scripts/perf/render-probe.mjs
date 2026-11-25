@@ -98,7 +98,7 @@ async function main() {
     console.log("Building a profiling build…");
     execFileSync("npx", ["next", "build", "--profile", "--no-mangling"], { cwd: root, env, stdio: "ignore" });
   }
-  await start("npx", ["next", "start", "-p", "3100"], "Ready");
+  await start("npx", ["next", "start", "-H", "127.0.0.1", "-p", "3100"], "Ready");
   const anon = mockEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const email = `probe.${Date.now()}@example.com`;
   const s = await (await fetch(`${MOCK}/auth/v1/signup`, { method: "POST", headers: { "content-type": "application/json", apikey: anon }, body: JSON.stringify({ email, password: "studyHard2027" }) })).json();

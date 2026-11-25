@@ -873,6 +873,7 @@ const storedStores = (page) => page.evaluate(() => Object.keys(localStorage).fil
 
 async function browserScenarios(browser, people) {
   const { owner, mod, s1 } = people;
+  check((await api(owner.token, "PATCH", "/api/admin/settings", { review_invite_enabled: false })).status === 200, "keep the scheduled dialog out of unrelated scenarios");
   mkdirSync(SHOTS, { recursive: true });
 
   await scenario("16. A student who opens /admin is told there's no access, and their menu has no link to it", async () => {
@@ -1010,8 +1011,8 @@ async function browserScenarios(browser, people) {
     await signInUi(page, mod.email, "/admin/settings");
     await page.getByRole("heading", { name: "Platform settings isn't part of your role" }).waitFor();
     check(!asked.includes("/api/admin/settings"), `the settings page asked for its data anyway: ${asked}`);
-    const links = await page.getByRole("navigation", { name: "Admin Center" }).getByRole("link").allInnerTexts();
-    check(JSON.stringify(links.map((l) => l.trim())) === JSON.stringify(["Overview", "Reviews"]), `a Moderator's navigation: ${links}`);
+    const links = await page.getByRole("navigation", { name: "Admin Center" }).getByRole("link").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("aria-label")));
+    check(JSON.stringify(links) === JSON.stringify(["Overview", "Reviews"]), `a Moderator's navigation: ${links}`);
     await page.goto(`${APP}/admin/reviews`);
     await page.getByRole("heading", { name: "Reviews", level: 1 }).waitFor();
     await page.waitForLoadState("networkidle");
@@ -1046,13 +1047,17 @@ async function trustBrowserScenarios(browser, people) {
   mkdirSync(SHOTS, { recursive: true });
 
   await scenario("20. An eligible student is invited on the dashboard, writes a review in five steps, and finds it in Settings", async () => {
+    check((await api(people.owner.token, "PATCH", "/api/admin/settings", { review_invite_enabled: true, review_invite_time: "00:00" })).status === 200, "enable the invitation for this fixture");
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
     const page = await ctx.newPage();
     await signInUi(page, s6.email, "/dashboard");
     await page.waitForURL(`${APP}/dashboard`);
     await intoApp(page, s6);
-    const card = page.getByRole("region", { name: "How has DoOrDie been for your preparation?" });
+    const card = page.getByRole("dialog", { name: "How is your DoOrDie experience?" });
     await card.waitFor();
+    await card.getByRole("button", { name: "Write a review" }).focus();
+    await page.keyboard.press("Tab");
+    check(await card.evaluate((element) => element.contains(document.activeElement)), "tab leaves the invitation modal");
     await page.screenshot({ path: join(SHOTS, "review-invitation.png") });
     await card.getByRole("button", { name: "Write a review" }).click();
     const wizard = page.getByRole("dialog", { name: "Review DoOrDie" });
@@ -1095,9 +1100,11 @@ async function trustBrowserScenarios(browser, people) {
     await page.goto(`${APP}/dashboard`);
     await page.getByRole("button", { name: /^Account:/ }).waitFor();
     await page.waitForLoadState("networkidle");
-    check(!(await page.getByRole("region", { name: "How has DoOrDie been for your preparation?" }).count()), "and isn't asked again");
+    check(!(await page.getByRole("dialog", { name: "How is your DoOrDie experience?" }).count()), "and isn't asked again");
     await ctx.close();
   });
+
+  check((await api(people.owner.token, "PATCH", "/api/admin/settings", { review_invite_enabled: false })).status === 200, "restore the unrelated browser fixtures");
 
   await scenario("21. A visitor tries the demo: the sample account, the seven-stop guide, nothing saved, and the way out", async () => {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
@@ -1694,7 +1701,7 @@ async function refreshScenarios(browser, people) {
     responses.length = 0;
     check((await refreshData(page)) === "success", "the Moderator's refresh");
     const asked = [...new Set(responses)];
-    check(asked.every((r) => /^200 \/api\/admin\/(overview|me)$/.test(r)), `the Moderator's refresh asked: ${asked}`);
+    check(asked.every((r) => /^200 \/api\/admin\/(overview|me|attention)$/.test(r)), `the Moderator's refresh asked: ${asked}`);
     await page.locator("[data-refresh-control]").getByRole("button", { name: /^Refresh details/ }).click();
     const panel = page.getByRole("dialog", { name: "Refresh details" });
     const outside = await panel.getByText(/^Not part of your role:/).locator("..").innerText();
@@ -1751,6 +1758,51 @@ async function refreshScenarios(browser, people) {
   });
 }
 
+async function webReleaseScenarios(browser, people) {
+  await scenario("29. Usage shows authorized metadata, and acknowledging attention keeps pending work visible", async () => {
+    const { owner, mod } = people;
+    const student = await signUpApi("Usage Student", "usage.student@example.com");
+    await giveUsage(student);
+    const usage = await rpcAs(student.token, "platform_record_sync_usage", {
+      p_account: student.id, p_batch: randomUUID(), p_pulls: 1, p_saves: 2,
+      p_successes: 2, p_failures: 0, p_conflicts: 1, p_upload: 24000, p_download: 18000,
+    });
+    check(usage.body === true, "recorded fixture sync measurements");
+    check((await sql("select public.platform_sample_footprint()")).ok, "sampled fixture footprint");
+    const report = await api(owner.token, "GET", `/api/admin/resource-usage?q=${encodeURIComponent(student.email)}&limit=1`);
+    check(report.status === 200 && data(report).items.length === 1 && data(report).items[0].upload === 24000, "bounded usage lookup");
+    check((await api(mod.token, "GET", "/api/admin/resource-usage")).status === 403, "moderators cannot read usage");
+    check(!("feedback" in data(await api(mod.token, "GET", "/api/admin/attention"))), "moderators cannot see feedback counts");
+    const created = await rpcAs(student.token, "platform_submit_feedback", { p_fields: { category: "general", message: "Private web release fixture text." } });
+    check(created.status === 200, "created feedback fixture");
+    const ready = data(await api(owner.token, "GET", "/api/admin/attention")).feedback;
+    check(ready.unseen && ready.pending > 0, "feedback raised a pending item and new cursor");
+
+    mkdirSync(SHOTS, { recursive: true });
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 960 } });
+    const page = await ctx.newPage();
+    await signInUi(page, owner.email);
+    await page.getByRole("heading", { name: "Needs attention" }).waitFor();
+    await page.screenshot({ path: join(SHOTS, "web-release-attention.png") });
+    await page.getByRole("button", { name: "Mark feedback updates seen" }).click();
+    await page.getByRole("button", { name: "Mark feedback updates seen" }).waitFor({ state: "detached" });
+    const seen = data(await api(owner.token, "GET", "/api/admin/attention")).feedback;
+    check(!seen.unseen && seen.pending === ready.pending, "acknowledgment changes unseen only");
+
+    await page.getByRole("navigation", { name: "Admin Center" }).getByRole("link", { name: "Resource usage", exact: true }).click();
+    await page.getByRole("heading", { name: "Resource usage", level: 1 }).waitFor();
+    await page.getByLabel("Account email").fill(student.email);
+    await page.getByRole("button", { name: "Search", exact: true }).click();
+    await page.getByRole("rowheader", { name: student.email }).waitFor();
+    await waitFor("email search to show only the matching account", async () => await page.getByRole("rowheader").count() === 1);
+    await page.screenshot({ path: join(SHOTS, "web-release-resource-usage.png") });
+    await page.setViewportSize({ width: 390, height: 844 });
+    check(await fitsWidth(page), "the resource page spills on mobile");
+    await page.screenshot({ path: join(SHOTS, "web-release-resource-mobile.png") });
+    await ctx.close();
+  });
+}
+
 /* ── run ───────────────────────────────────────────────────────── */
 
 async function main() {
@@ -1763,7 +1815,7 @@ async function main() {
   // The mock's database starts empty every run, so answers Next stored from an
   // earlier run (published reviews, changelog entries) would be wrong here.
   rmSync(join(root, ".next", "cache", "fetch-cache"), { recursive: true, force: true });
-  await start(process.execPath, ["node_modules/next/dist/bin/next", "start", "-p", "3100"], "Ready");
+  await start(process.execPath, ["node_modules/next/dist/bin/next", "start", "-H", "127.0.0.1", "-p", "3100"], "Ready");
   const browser = await chromium.launch();
   try {
     const people = {
@@ -1777,6 +1829,13 @@ async function main() {
       s5: await signUpApi("Student Five", "student.five@example.com"),
       s6: await signUpApi("Student Six", "student.six@example.com"),
     };
+    if (process.argv.includes("--web-release-only")) {
+      check((await sql(bootstrapSql(people.owner.id))).ok, "the owner's role");
+      check((await api(people.owner.token, "POST", "/api/admin/access", { email: people.mod.email, role: "moderator" })).status === 200, "the Moderator's role");
+      await webReleaseScenarios(browser, people);
+      console.log(`\nAll ${passed} scenarios passed. Screenshots: ${SHOTS}`);
+      return;
+    }
     if (process.argv.includes("--refresh-only")) {
       check((await sql(bootstrapSql(people.owner.id))).ok, "the owner's role");
       check((await api(people.owner.token, "POST", "/api/admin/access", { email: people.mod.email, role: "moderator" })).status === 200, "the Moderator's role");
@@ -1801,6 +1860,7 @@ async function main() {
     if (!process.argv.includes("--trust-only") && !process.argv.includes("--help-only")) {
       await liveBrowserScenarios(browser, people);
       await refreshScenarios(browser, people);
+      await webReleaseScenarios(browser, people);
     }
     console.log(`\nAll ${passed} scenarios passed. Screenshots: ${SHOTS}`);
   } catch (e) {

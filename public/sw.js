@@ -15,7 +15,8 @@
 // v12 — violet icons, and the loading animations are CSS, so there are no
 // animation files to keep. (v11: Lavender the default. v10: a third theme,
 // Lavender. v9: the redesign, with Light and Dark.)
-const CACHE_VERSION = "v12";
+// v13 retires route caches from before the framework and sync compatibility upgrade.
+const CACHE_VERSION = "v13";
 const SHELL_CACHE = `chronicle-shell-${CACHE_VERSION}`;
 const PAGE_CACHE = `chronicle-pages-${CACHE_VERSION}`;
 const ASSET_CACHE = `chronicle-assets-${CACHE_VERSION}`;

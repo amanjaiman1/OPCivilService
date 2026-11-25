@@ -28,8 +28,8 @@ function isJournalDate(value: string): boolean {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value && year >= 2000 && year <= 2100;
 }
 
-export default function Page({ params }: { params: { date: string } }) {
+export default async function Page({ params }: { params: Promise<{ date: string }> }) {
   // Anything else would be built and kept like a real day.
-  if (!isJournalDate(params.date)) notFound();
+  if (!isJournalDate((await params).date)) notFound();
   return <JournalDayView />;
 }
