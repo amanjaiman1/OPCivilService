@@ -24,17 +24,35 @@ import { useFeatureAccess } from "@/components/features/feature-access";
 import { canAccessFeature } from "@/lib/features";
 import { useSleepQuickActions } from "@/components/sleep/sleep-editor";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useAccount } from "@/components/account/account-session";
+import { formatClock, nightLabel, timeFormatOf } from "@/lib/sleep";
+import { useChronicle } from "@/lib/store";
+import { getActiveAccountId } from "@/lib/account/scope";
 
 function SleepRailAction() {
   const action = useSleepQuickActions();
   const toast = useToast();
+  const confirm = useConfirm();
+  const format = useChronicle((s) => timeFormatOf(s.profile));
   if (!action.canWakeNow && !action.canBedNow) return null;
   const waking = action.canWakeNow;
   const label = waking ? "Woke up now" : "Going to bed now";
   const Icon = waking ? Sunrise : BedDouble;
+  const date = waking ? action.today : action.tonightDate;
   return (
-    <IconButton label={label} size="lg" onClick={() => {
+    <IconButton label={label} size="lg" aria-haspopup="dialog" onClick={async () => {
+      const account = getActiveAccountId();
+      if (!date || !(await confirm({
+        title: waking ? "Record wake-up time?" : "Record bedtime?",
+        description: `Save ${formatClock(action.nowClock, format)} for the night of ${nightLabel(date)}.`,
+        confirmLabel: waking ? "Record wake-up" : "Record bedtime",
+        tone: "default",
+        icon: Icon,
+      })) || account !== getActiveAccountId()) return;
+
+      const night = useChronicle.getState().lifeLog.find((entry) => entry.date === date);
+      if (waking ? !night?.bedtime || night.wakeTime : night?.bedtime) return;
       if (waking) action.wakeNow();
       else action.bedNow();
       toast({ title: waking ? "Wake-up time recorded" : "Bedtime recorded" });

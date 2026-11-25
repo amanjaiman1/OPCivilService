@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Goal } from "@/lib/types";
+import { blankItem, blankPlan, withStatus } from "@/lib/roadmap";
+import { weeklyGoalInView, weeklyGoalItems } from "@/lib/weekly-goal-items";
 import {
   byPriority,
   computeGoalProgress,
@@ -34,6 +36,29 @@ const goal = (over: Partial<Goal>): Goal => ({
   status: "Active",
   createdOn: "2026-11-01",
   ...over,
+});
+
+test("weekly roadmap objectives and milestones appear in Goals with their current Roadmap status", () => {
+  const month = { ...blankPlan("month", { month: "2026-11" }), archivedAt: "2026-11-15T12:00:00Z" };
+  const archive = { ...blankPlan("week", { start: "2026-11-16" }), parentId: month.id, items: [blankItem("milestone", "Archived checkpoint")] };
+  const objective = blankItem("objective", "Complete a practice set");
+  const milestone = { ...blankItem("milestone", "Finish revision"), targetDate: TODAY };
+  const week = {
+    ...blankPlan("week", { start: "2026-11-02" }),
+    items: [objective, milestone, blankItem("activity", "Read notes")],
+  };
+  month.items = [blankItem("milestone", "Monthly checkpoint")];
+  const plans = [week, month, archive];
+  const rows = weeklyGoalItems(plans, TODAY);
+  assert.deepEqual(rows.map((row) => row.item.title), [objective.title, milestone.title, "Archived checkpoint"]);
+  assert.deepEqual(rows.filter((row) => weeklyGoalInView(row, "overdue")).map((row) => row.item.id), [objective.id]);
+  assert.deepEqual(rows.filter((row) => weeklyGoalInView(row, "active")).map((row) => row.item.id), [objective.id, milestone.id]);
+  assert.equal(weeklyGoalInView(rows[2], "all"), true);
+
+  const updatedWeek = { ...week, items: [withStatus({ ...objective, title: "Practice set done" }, "completed")] };
+  const updated = weeklyGoalItems([updatedWeek, month, archive], TODAY);
+  assert.deepEqual(updated.filter((row) => weeklyGoalInView(row, "completed")).map((row) => row.item.title), ["Practice set done"]);
+  assert.equal(updated.some((row) => row.item.id === milestone.id), false);
 });
 
 test("a milestone goal's progress is the share of its steps done", () => {

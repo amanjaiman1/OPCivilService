@@ -352,6 +352,14 @@ async function phaseOne(page, phone, student) {
   await page.getByText(/From Revision/, { exact: false }).first().waitFor();
 
   await page.goto(`${APP}/goals`);
+  const studyGoals = page.getByRole("region", { name: "Study" });
+  await studyGoals.getByRole("link", { name: /Complete Federal practice drill/ }).waitFor();
+  await page.getByRole("button", { name: /^Completed ·/ }).click();
+  const milestone = studyGoals.getByRole("link", { name: /Finish the first practice set/ });
+  await milestone.waitFor();
+  await milestone.click();
+  await page.waitForURL((url) => url.pathname === "/roadmap" && url.searchParams.get("plan") === first.id && url.searchParams.has("item"));
+  await page.goto(`${APP}/goals`);
   await page.getByRole("button", { name: "New goal", exact: true }).click();
   const goal = page.getByRole("dialog", { name: "New goal" });
   await goal.getByLabel("Name", { exact: true }).fill("Read five hours this week");
@@ -371,6 +379,11 @@ async function phaseTwo(page, student) {
   await page.setViewportSize({ width: 1440, height: 960 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   const home = page.url();
+  const round = await trigger.evaluate((element) => {
+    const { width, height } = element.getBoundingClientRect();
+    return width === height && parseFloat(getComputedStyle(element).borderTopLeftRadius) >= width / 2;
+  });
+  check(round, "the desktop Capture button is not circular");
   await trigger.click();
   await workspace.waitFor();
   check(page.url() === home, "opening from Home changed the address");
@@ -491,6 +504,23 @@ Capture button to visible dialog (ms, first/next/next): ${timings.join(", ")}`);
     }
     await workspace.waitFor({ state: "detached" });
   }
+
+  const bedtime = new Date();
+  bedtime.setHours(22, 25, 0, 0);
+  const night = new Date(bedtime);
+  night.setDate(night.getDate() + 1);
+  const nightDate = night.toLocaleDateString("en-CA");
+  await page.clock.setFixedTime(bedtime);
+  await page.goto(`${APP}/revision`);
+  const bedAction = page.getByRole("button", { name: "Going to bed now" });
+  const confirmBedtime = page.getByRole("dialog", { name: "Record bedtime?" });
+  await bedAction.click();
+  await confirmBedtime.getByRole("button", { name: "Cancel", exact: true }).click();
+  await confirmBedtime.waitFor({ state: "detached" });
+  check(!(await lifeDayOf(student.email, nightDate))?.bedtime, "cancelling bedtime wrote a sleep record");
+  await bedAction.click();
+  await confirmBedtime.getByRole("button", { name: "Record bedtime", exact: true }).click();
+  await waitFor("confirmed bedtime in the cloud", async () => (await lifeDayOf(student.email, nightDate))?.bedtime === "22:25");
 }
 
 /* ── run ───────────────────────────────────────────────────────── */

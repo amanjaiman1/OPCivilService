@@ -14,6 +14,10 @@ import { EmptyState, Chip, Segmented } from "@/components/ui/misc";
 import { GoalForm, emptyGoal } from "@/components/goals/goal-form";
 import { GoalCard } from "@/components/goals/goal-card";
 import { GoalDetail } from "@/components/goals/goal-detail";
+import { WeeklyGoalList } from "@/components/goals/weekly-goal-list";
+import { useFeatureAccess } from "@/components/features/feature-access";
+import { canAccessFeature } from "@/lib/features";
+import { weeklyGoalInView, weeklyGoalItems } from "@/lib/weekly-goal-items";
 import {
   GOAL_CATEGORIES,
   GOAL_VIEWS,
@@ -88,6 +92,8 @@ function SummaryTile({
 export default function GoalsPage() {
   const hydrated = useHasHydrated();
   const goals = useChronicle((s) => s.goals);
+  const plans = useChronicle((s) => s.plans);
+  const roadmapEnabled = canAccessFeature(useFeatureAccess(), "roadmap");
   const journal = useChronicle((s) => s.journal);
   const subjects = useChronicle((s) => s.subjects);
   const mocks = useChronicle((s) => s.mocks);
@@ -133,11 +139,17 @@ export default function GoalsPage() {
 
   const all = useMemo(() => goals.map((g) => computeGoalProgress(g, data, today)), [goals, data, today]);
   const portfolio = useMemo(() => goalPortfolio(all), [all]);
-  const counts = useMemo(() => goalViewCounts(all), [all]);
+  const weekly = useMemo(() => roadmapEnabled ? weeklyGoalItems(plans, today) : [], [plans, today, roadmapEnabled]);
+  const counts = useMemo(() => {
+    const totals = goalViewCounts(all);
+    for (const { id } of GOAL_VIEWS) totals[id] += weekly.filter((row) => weeklyGoalInView(row, id)).length;
+    return totals;
+  }, [all, weekly]);
   const usedCategories = useMemo(() => {
     const used = new Set(goals.map(goalCategory));
+    if (weekly.length > 0) used.add("Study");
     return GOAL_CATEGORIES.filter((c) => used.has(c));
-  }, [goals]);
+  }, [goals, weekly]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -163,7 +175,31 @@ export default function GoalsPage() {
     );
   }, [all, view, category, query, sort, slipping]);
 
-  const groups = useMemo(() => groupGoalProgress(visible), [visible]);
+  const visibleWeekly = useMemo(() => {
+    if (category !== "all" && category !== "Study") return [];
+    const q = query.trim().toLowerCase();
+    return weekly.filter((row) =>
+      weeklyGoalInView(row, view) && (!slipping || row.overdue) &&
+      [row.item.title, row.item.kind, row.planTitle, row.item.description, row.item.notes, "Study"].some((value) =>
+        value?.toLowerCase().includes(q),
+      ),
+    ).sort((a, b) => {
+      if (sort === "progress") {
+        const completed = Number(b.item.status === "completed") - Number(a.item.status === "completed");
+        if (completed) return completed;
+      }
+      return a.due.localeCompare(b.due);
+    });
+  }, [weekly, view, category, query, slipping, sort]);
+  const groups = useMemo(() => {
+    const records = new Map(groupGoalProgress(visible).map((group) => [group.category, group.records]));
+    return GOAL_CATEGORIES.flatMap((category) => {
+      const group = records.get(category);
+      return group || (category === "Study" && visibleWeekly.length)
+        ? [{ category, records: group ?? [] }]
+        : [];
+    });
+  }, [visible, visibleWeekly]);
   const sparks = useMemo(() => {
     const m = new Map<string, number[]>();
     for (const p of visible) m.set(p.goal.id, contributionSeries(p.goal, data, today, 21).map((s) => s.value));
@@ -222,13 +258,13 @@ export default function GoalsPage() {
         }
       />
 
-      {goals.length > 0 && (
+      {counts.all > 0 && (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <SummaryTile
             icon={Target}
             label="Active"
-            value={`${portfolio.active}`}
-            hint={`${portfolio.tracked} of ${portfolio.total} update themselves`}
+            value={`${counts.active}`}
+            hint={portfolio.total > 0 ? `${portfolio.tracked} of ${portfolio.total} personal goals track progress` : undefined}
             onClick={() => setView("active")}
           />
           <SummaryTile
@@ -240,13 +276,13 @@ export default function GoalsPage() {
           <SummaryTile
             icon={Zap}
             label="Completed"
-            value={`${portfolio.completed}`}
+            value={`${counts.completed}`}
             hint={
               portfolio.completionRate == null
-                ? "nothing finished yet"
-                : `${Math.round(portfolio.completionRate * 100)}% of unpaused goals`
+                ? undefined
+                : `${Math.round(portfolio.completionRate * 100)}% of unpaused personal goals`
             }
-            tone={portfolio.completed > 0 ? "positive" : undefined}
+            tone={counts.completed > 0 ? "positive" : undefined}
             onClick={() => setView("completed")}
           />
           <SummaryTile
@@ -284,7 +320,7 @@ export default function GoalsPage() {
         </Card>
       )}
 
-      {goals.length === 0 ? (
+      {counts.all === 0 ? (
         <EmptyState
           icon={<Target className="h-5 w-5" />}
           title="No goals yet"
@@ -351,12 +387,12 @@ export default function GoalsPage() {
                 </button>
               )}
               <span className="ml-auto text-[0.72rem] text-paper/50">
-                {visible.length} of {counts[view]} shown
+                {visible.length + visibleWeekly.length} of {counts[view]} shown
               </span>
             </div>
           </div>
 
-          {visible.length === 0 ? (
+          {groups.length === 0 ? (
             <EmptyState
               icon={<Search className="h-5 w-5" />}
               title={filtered ? "Nothing matches" : `No ${GOAL_VIEWS.find((v) => v.id === view)?.label.toLowerCase()} goals`}
@@ -381,6 +417,9 @@ export default function GoalsPage() {
                 const active = records.filter(({ goal }) => goal.status === "Active");
                 const completed = records.filter(({ goal }) => goal.status === "Completed");
                 const other = records.filter(({ goal }) => goal.status !== "Active" && goal.status !== "Completed");
+                const linked = label === "Study" ? visibleWeekly : [];
+                const activeCount = active.length + linked.filter((row) => weeklyGoalInView(row, "active")).length;
+                const completedCount = completed.length + linked.filter((row) => weeklyGoalInView(row, "completed")).length;
                 const statuses = [
                   { label: "Active", records: active },
                   { label: "Completed", records: completed },
@@ -392,8 +431,8 @@ export default function GoalsPage() {
                     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2">
                       <div className="flex flex-wrap items-baseline gap-x-2">
                         <h2 id={heading} className="text-base font-semibold text-paper">{label}</h2>
-                        {active.length > 0 && <span className="text-xs text-paper/60">{active.length} active</span>}
-                        {completed.length > 0 && <span className="text-xs text-paper/60">{completed.length} completed</span>}
+                        {activeCount > 0 && <span className="text-xs text-paper/60">{activeCount} active</span>}
+                        {completedCount > 0 && <span className="text-xs text-paper/60">{completedCount} completed</span>}
                       </div>
                       <Button variant="ghost" size="sm" aria-label={`Add a ${label} goal`} onClick={() => openAdd(label)}>
                         <Plus className="h-4 w-4" /> Add goal
@@ -416,6 +455,7 @@ export default function GoalsPage() {
                         </div>
                       </div>
                     ))}
+                    {linked.length > 0 && <WeeklyGoalList rows={linked} />}
                   </section>
                 );
               })}
