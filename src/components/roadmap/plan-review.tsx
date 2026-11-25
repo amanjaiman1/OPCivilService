@@ -3,12 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Check, ChevronRight, Forward } from "lucide-react";
-import type { ISODate, RoadmapPlan } from "@/lib/types";
+import type { ISODate, PlanReviewSnapshot, RoadmapPlan } from "@/lib/types";
 import { useChronicle } from "@/lib/store";
-import { activitiesOf, carryable, formatDay, isCarried, nextPlanOf, planName, timingOf } from "@/lib/roadmap";
+import { buildPlanReviewSnapshot, carryable, formatDay, nextPlanOf, planName, timingOf } from "@/lib/roadmap";
 import { Button } from "@/components/ui/button";
 import { Field, Textarea } from "@/components/ui/form";
-import { cn, toISODate } from "@/lib/utils";
+import { formatHours, toISODate } from "@/lib/utils";
 import { Block, useRoadmapNav } from "./shared";
 
 function TitleList({ titles, empty }: { titles: string[]; empty: string }) {
@@ -23,6 +23,32 @@ function TitleList({ titles, empty }: { titles: string[]; empty: string }) {
       ))}
       {titles.length > shown.length && <li className="text-[0.72rem] text-paper/55">and {titles.length - shown.length} more</li>}
     </ul>
+  );
+}
+
+export function PlanReviewEvidence({ snapshot }: { snapshot: PlanReviewSnapshot }) {
+  const groups = [
+    { label: "Objectives completed", titles: snapshot.objectives },
+    { label: "Activities completed", titles: snapshot.activities },
+    { label: "Milestones reached", titles: snapshot.milestones },
+    { label: "Still open", titles: snapshot.remaining },
+    { label: "Deferred", titles: snapshot.deferred },
+    { label: "Carried forward", titles: snapshot.carried },
+  ];
+  return (
+    <div className="space-y-3">
+      <dl className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {groups.map(({ label, titles }) => (
+          <div key={label} className="min-w-0 rounded-xl border border-line bg-paper/[0.02] p-3">
+            <dt className="mb-1.5 text-xs font-semibold text-paper/80">{label} · {titles.length}</dt>
+            <dd><TitleList titles={titles} empty="None" /></dd>
+          </div>
+        ))}
+      </dl>
+      <p className="text-xs text-paper/65">
+        Journal activity · {snapshot.journalDays} days logged · {formatHours(snapshot.studyHours)} studied · {snapshot.topics} topics completed
+      </p>
+    </div>
   );
 }
 
@@ -43,6 +69,7 @@ export function PlanReviewBlock({
   onPlanNext: () => void;
 }) {
   const plans = useChronicle((s) => s.plans);
+  const journal = useChronicle((s) => s.journal);
   const savePlanReview = useChronicle((s) => s.savePlanReview);
   const nav = useRoadmapNav();
   const [wentWell, setWentWell] = useState("");
@@ -57,10 +84,8 @@ export function PlanReviewBlock({
     setSaved(false);
   }, [plan.id, plan.review?.wentWell, plan.review?.improve, plan.review?.nextPriorities]);
 
-  const acts = activitiesOf(plan);
-  const done = acts.filter((i) => i.status === "completed").map((i) => i.title);
-  const open = carryable(plans, plan).map((i) => i.title);
-  const carried = acts.filter((i) => isCarried(plans, i)).map((i) => i.title);
+  const live = useMemo(() => buildPlanReviewSnapshot(plans, plan, journal, today), [plans, plan, journal, today]);
+  const canCarry = plan.level !== "year" && carryable(plans, plan).length > 0;
   const timing = timingOf(plan, today);
   const next = nextPlanOf(plans, plan);
   const dirty =
@@ -84,29 +109,19 @@ export function PlanReviewBlock({
             : `This ${plan.level} hasn't started yet.`
       }
     >
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border border-line bg-paper/[0.02] p-3">
-          <p className="mb-1.5 flex items-center gap-1.5 text-[0.72rem] font-semibold text-positive">
-            <Check className="h-3.5 w-3.5" /> Completed · {done.length}
-          </p>
-          <TitleList titles={done} empty="Nothing completed yet." />
-        </div>
-        <div className="rounded-xl border border-line bg-paper/[0.02] p-3">
-          <p className="mb-1.5 text-[0.72rem] font-semibold text-paper/80">Still open · {open.length}</p>
-          <TitleList titles={open} empty="Nothing left open." />
-          {open.length > 0 && plan.level !== "year" && (
-            <Button variant="subtle" size="sm" className="-ml-2 mt-1.5" onClick={onCarry}>
-              <Forward className="h-3.5 w-3.5" /> Carry forward
-            </Button>
-          )}
-        </div>
-        <div className="rounded-xl border border-line bg-paper/[0.02] p-3">
-          <p className="mb-1.5 flex items-center gap-1.5 text-[0.72rem] font-semibold text-paper/80">
-            <Forward className="h-3.5 w-3.5" /> Carried forward · {carried.length}
-          </p>
-          <TitleList titles={carried} empty="Nothing carried forward." />
-        </div>
-      </div>
+      <p className="text-xs font-semibold text-paper/70">Live period activity</p>
+      <PlanReviewEvidence snapshot={live} />
+      {canCarry && (
+        <Button variant="subtle" size="sm" onClick={onCarry}>
+          <Forward className="h-3.5 w-3.5" /> Carry unfinished work forward
+        </Button>
+      )}
+      {plan.review?.snapshot && (
+        <details className="rounded-xl border border-line p-3">
+          <summary className="cursor-pointer text-sm font-semibold text-paper/75">Saved activity snapshot{when ? ` · ${when}` : ""}</summary>
+          <div className="mt-3"><PlanReviewEvidence snapshot={plan.review.snapshot} /></div>
+        </details>
+      )}
 
       <form
         className="space-y-3"
@@ -116,6 +131,7 @@ export function PlanReviewBlock({
           setSaved(true);
         }}
       >
+        <p className="text-xs font-semibold text-paper/70">Reflection (optional)</p>
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label="What went well?">
             <Textarea value={wentWell} onChange={(e) => { setWentWell(e.target.value); setSaved(false); }} maxLength={1000} className="min-h-[88px]" />
@@ -133,7 +149,7 @@ export function PlanReviewBlock({
           </Field>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="submit" size="sm" disabled={!dirty}>
+          <Button type="submit" size="sm" disabled={saved && !dirty}>
             Save review
           </Button>
           {saved && !dirty ? (
@@ -156,13 +172,9 @@ export function PlanReviewBlock({
             ))}
         </div>
       </form>
-      <p className={cn("text-[0.72rem] text-paper/55")}>
-        This review is about the plan. For the hours, mocks and subjects your journal recorded, see{" "}
-        <Link href={reviewsHref} className="font-semibold text-accent hover:underline">
-          Reviews
-        </Link>
-        .
-      </p>
+      <Link href={reviewsHref} className="text-xs font-semibold text-accent hover:underline">
+        Open Performance Review
+      </Link>
     </Block>
   );
 }

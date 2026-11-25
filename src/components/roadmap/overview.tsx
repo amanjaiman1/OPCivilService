@@ -121,7 +121,9 @@ export function PlanCard({ plan, plans, today, extra }: { plan: RoadmapPlan; pla
       <span className="mt-auto w-full space-y-1.5 pt-1">
         <ExecutionBar counts={counts} compact />
         <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.68rem] text-paper/60">
-          <span>{counts.total ? `${counts.completed} of ${counts.total} done` : "Nothing planned yet"}</span>
+          {counts.total > 0 && <span>{counts.completed}/{counts.total} activities</span>}
+          {counts.objectives > 0 && <span>{counts.objectivesDone}/{counts.objectives} objectives</span>}
+          {!counts.total && !counts.objectives && !counts.milestones && <span>Nothing planned yet</span>}
           {counts.overdue > 0 && <span className="font-semibold text-danger">{counts.overdue} overdue</span>}
           {counts.milestones > 0 && (
             <span className="inline-flex items-center gap-1">

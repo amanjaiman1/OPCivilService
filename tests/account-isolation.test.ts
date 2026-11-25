@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { MemoryStorage } from "./memory-storage";
 import {
   accountStorage,
+  didAccountSnapshotWriteFail,
   eraseAccountKeys,
   setActiveAccount,
   enableWrites,
@@ -37,6 +38,22 @@ test("each account reads and writes only its own key", () => {
   accountStorage.setItem("upsc-chronicle-store", "bob-data");
   assert.equal(disk.getItem("upsc-chronicle-store:alice"), "alice-data");
   assert.equal(disk.getItem("upsc-chronicle-store:bob"), "bob-data");
+});
+
+test("snapshot durability failure is visible and clears on retry or account switch", () => {
+  setActiveAccount("alice");
+  enableWrites();
+  const failing = new MemoryStorage();
+  failing.setItem = () => { throw new Error("Quota exceeded"); };
+  setStorageBackend(failing as unknown as Storage);
+  accountStorage.setItem("upsc-chronicle-store", "new-data");
+  assert.equal(didAccountSnapshotWriteFail(), true);
+  setStorageBackend(disk as unknown as Storage);
+  accountStorage.setItem("upsc-chronicle-store", "new-data");
+  assert.equal(didAccountSnapshotWriteFail(), false);
+  assert.equal(disk.getItem("upsc-chronicle-store:alice"), "new-data");
+  setActiveAccount("bob");
+  assert.equal(didAccountSnapshotWriteFail(), false);
 });
 
 test("switching accounts turns writes off until the new account is ready", () => {

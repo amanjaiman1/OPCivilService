@@ -9,7 +9,7 @@ import type {
   TopicStatus,
 } from "./types";
 import { daysBetween, round, avg } from "./utils";
-import { completedTopicsOf } from "./topics";
+import { completedTopicsOf, normName } from "./topics";
 
 /* ════════════════════════════════════════════════════════════════
    Reading the syllabus as a whole.
@@ -132,8 +132,16 @@ export function buildLinkage(
   mistakes: Mistake[],
   journal: JournalEntry[],
   today: ISODate,
+  subjects: Subject[],
 ): LinkageIndex {
   const byTopic = new Map<string, TopicLinkage>();
+  const idsByName = new Map<string, string | null>();
+  for (const subject of subjects) {
+    for (const topic of subject.topics) {
+      const nameKey = key(subject.id, normName(topic.name));
+      idsByName.set(nameKey, idsByName.has(nameKey) ? null : topic.id);
+    }
+  }
   const touch = (k: string): TopicLinkage => {
     let hit = byTopic.get(k);
     if (!hit) {
@@ -144,7 +152,9 @@ export function buildLinkage(
   };
 
   for (const r of revisions) {
-    const hit = touch(key(r.subjectId, r.topic));
+    const id = r.topicId ?? idsByName.get(key(r.subjectId, normName(r.topic)));
+    if (!id) continue;
+    const hit = touch(id);
     hit.revisions += 1;
     if (r.nextDue <= today) hit.revisionDue = true;
   }
@@ -153,16 +163,11 @@ export function buildLinkage(
     hit.mistakes += 1;
     if (m.status !== "Mastered") hit.openMistakes += 1;
   }
-  /* A completion picked from the syllabus carries its subject, so it is
-     credited to exactly that topic. Free-text ones name no subject, so those are
-     credited to the name under every subject — the alternative is dropping the
-     signal, and a topic name is specific enough in practice. */
-  for (const e of journal) {
-    for (const c of completedTopicsOf(e)) {
-      const n = c.name.trim().toLowerCase();
-      if (!n) continue;
-      const hit = touch(c.subjectId && c.topicId ? key(c.subjectId, c.name) : `*::${n}`);
-      hit.journalMentions += 1;
+  for (const entry of journal) {
+    for (const completion of completedTopicsOf(entry)) {
+      if (!completion.subjectId) continue;
+      const id = completion.topicId ?? idsByName.get(key(completion.subjectId, normName(completion.name)));
+      if (id) touch(id).journalMentions++;
     }
   }
   return { byTopic };
@@ -179,17 +184,15 @@ const EMPTY_LINKAGE: TopicLinkage = {
 export function linkageFor(
   index: LinkageIndex,
   subjectId: string,
-  topicName: string,
+  topic: Pick<Topic, "id" | "name">,
 ): TopicLinkage {
-  const own = index.byTopic.get(key(subjectId, topicName));
-  const mentions = index.byTopic.get(`*::${topicName.trim().toLowerCase()}`);
-  if (!own && !mentions) return EMPTY_LINKAGE;
+  const linked = index.byTopic.get(topic.id);
+  const mistakes = index.byTopic.get(key(subjectId, topic.name));
+  if (!linked && !mistakes) return EMPTY_LINKAGE;
   return {
-    revisions: own?.revisions ?? 0,
-    revisionDue: own?.revisionDue ?? false,
-    mistakes: own?.mistakes ?? 0,
-    openMistakes: own?.openMistakes ?? 0,
-    journalMentions: (own?.journalMentions ?? 0) + (mentions?.journalMentions ?? 0),
+    ...EMPTY_LINKAGE, ...linked,
+    mistakes: mistakes?.mistakes ?? 0,
+    openMistakes: mistakes?.openMistakes ?? 0,
   };
 }
 
@@ -222,7 +225,7 @@ export function rollupSubject(
   let onRevisionQueue = 0;
   let revisionDue = 0;
   for (const t of subject.topics) {
-    const l = linkageFor(linkage, subject.id, t.name);
+    const l = linkageFor(linkage, subject.id, t);
     if (l.openMistakes > 0) withOpenMistakes += 1;
     if (l.revisions > 0) onRevisionQueue += 1;
     if (l.revisionDue) revisionDue += 1;
@@ -267,7 +270,7 @@ export function weakestTopics(
         subjectId: s.id,
         subjectName: s.name,
         topic: t,
-        linkage: linkageFor(linkage, s.id, t.name),
+        linkage: linkageFor(linkage, s.id, t),
         staleDays: daysSinceTouched(t, today),
       });
     }

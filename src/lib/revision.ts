@@ -1,3 +1,4 @@
+import { matchSyllabusTopic } from "./topics";
 import type { ISODate, RevisionItem, Subject } from "./types";
 import { fromISODate, toISODate, daysBetween, round, avg, uid } from "./utils";
 
@@ -69,6 +70,17 @@ export function applyRevision(
 ): RevisionItem {
   const next = nextSchedule(item, remembered, today);
   return { ...item, ...next, passes: withPass(item, toISODate(today)) };
+}
+
+/** Keep evidence source in step with the retained revision days. */
+export function withPassOrigin(item: RevisionItem, date: ISODate, origin: "journal" | "confirmed"): RevisionItem {
+  const journalPasses = Object.fromEntries(
+    (item.passes ?? []).flatMap((day) => {
+      const value = day === date ? origin : item.journalPasses?.[day];
+      return value ? [[day, value] as const] : [];
+    }),
+  );
+  return { ...item, journalPasses };
 }
 
 /** A fresh item, due immediately — you add something because you want to revise it. */
@@ -220,22 +232,18 @@ export function confidenceSpread(
   }));
 }
 
-/**
- * The syllabus topic a revision item refers to, if there is one.
- *
- * Revision items carry `subjectId` plus a free-text topic name rather than a
- * `Topic.id`, so reviewing one can only credit the syllabus topic by resolving
- * the name. Matching is case- and whitespace-insensitive because the two were
- * typed on different screens.
- */
+/** Resolve a canonical link first. Legacy names must match uniquely within the subject. */
 export function resolveTopicId(
-  item: Pick<RevisionItem, "subjectId" | "topic">,
+  item: Pick<RevisionItem, "subjectId" | "topic" | "topicId">,
   subjects: Subject[],
 ): string | null {
-  const norm = (s: string) => s.trim().toLowerCase();
-  const subject = subjects.find((s) => s.id === item.subjectId);
-  if (!subject) return null;
-  return subject.topics.find((t) => norm(t.name) === norm(item.topic))?.id ?? null;
+  if (!item.subjectId) return null;
+  if (item.topicId) {
+    return subjects.find((subject) => subject.id === item.subjectId)?.topics.some((topic) => topic.id === item.topicId)
+      ? item.topicId
+      : null;
+  }
+  return matchSyllabusTopic(item.topic, subjects, item.subjectId)?.topicId ?? null;
 }
 
 /** Describes an item's schedule in words, for a tooltip or list row. */

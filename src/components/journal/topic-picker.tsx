@@ -3,7 +3,8 @@
 import { useDeferredValue, useId, useMemo, useRef, useState } from "react";
 import { BookMarked, History, Plus, Search, X } from "lucide-react";
 import type { JournalEntry, Subject, TopicCompletion } from "@/lib/types";
-import { normName, searchTopicOptions, type TopicOption } from "@/lib/topics";
+import { completionKey, normName, searchTopicOptions, type TopicOption } from "@/lib/topics";
+import { Select } from "@/components/ui/form";
 import { STATUS_LABEL } from "@/lib/subjects";
 import { cn, formatDate, uid } from "@/lib/utils";
 
@@ -14,12 +15,7 @@ const STATUS_DOT: Record<string, string> = {
   mastered: "bg-accent",
 };
 
-/**
- * "What did you finish today?" — a search over the syllabus and over topics
- * saved on earlier days, so a topic is picked rather than retyped. Picking from
- * the syllabus is what lets saving the day move the topic's progress and put
- * it on the revision queue. Anything else can still be added as free text.
- */
+/** Search the selected subject before adding a new topic or an unassigned note. */
 export function TopicPicker({
   value,
   onChange,
@@ -35,33 +31,32 @@ export function TopicPicker({
   prefer?: string[];
 }) {
   const [query, setQuery] = useState("");
+  const [selection, setSelection] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
-  const [active, setActive] = useState(0);
+  const [active, setActive] = useState(-1);
   const deferred = useDeferredValue(query);
   const inputRef = useRef<HTMLInputElement>(null);
   const listId = useId();
 
   const subjectName = useMemo(() => new Map(subjects.map((s) => [s.id, s.name])), [subjects]);
-  const chosen = useMemo(() => {
-    const keys = new Set<string>();
-    for (const c of value) keys.add(c.topicId ?? `custom:${normName(c.name)}`);
-    return keys;
-  }, [value]);
-  const preferSet = useMemo(() => new Set((prefer ?? []).filter(Boolean)), [prefer]);
+  const chosen = useMemo(() => new Set(value.map(completionKey)), [value]);
+  const preferSet = useMemo(() => new Set((prefer ?? []).filter((id) => subjectName.has(id))), [prefer, subjectName]);
+  const suggested = preferSet.size === 1 ? [...preferSet][0] : "";
+  const subjectId = selection !== null && subjectName.has(selection) ? selection : selection === "" ? "" : suggested;
 
   const options = useMemo(
-    () =>
-      searchTopicOptions(deferred, subjects, journal, {
-        exclude: chosen,
-        limit: 12,
-        prefer: preferSet,
-      }),
-    [deferred, subjects, journal, chosen, preferSet],
+    () => searchTopicOptions(deferred, subjects, journal, {
+      subjectId: subjectId || undefined,
+      exclude: new Set([...chosen].flatMap((key) => [key, `custom:${key}`])),
+      limit: 12,
+      prefer: subjectId ? undefined : preferSet,
+    }),
+    [deferred, subjects, journal, chosen, preferSet, subjectId],
   );
-  const typed = query.trim();
-  const exact = options.some((o) => normName(o.name) === normName(typed));
-  const showCustom = typed.length > 1 && !exact && !chosen.has(`custom:${normName(typed)}`);
-  const total = options.length + (showCustom ? 1 : 0);
+  const typed = query.trim().replace(/\s+/g, " ");
+  const exact = subjects.find((subject) => subject.id === subjectId)?.topics.filter((topic) => normName(topic.name) === normName(typed)) ?? [];
+  const showCustom = Boolean(typed && typed.length <= 160 && !exact.length && !chosen.has(completionKey({ id: "", name: typed, subjectId })));
+  const total = options.length + Number(showCustom);
 
   function pick(o: TopicOption) {
     onChange([
@@ -69,14 +64,14 @@ export function TopicPicker({
       { id: uid("tc"), name: o.name, ...(o.subjectId ? { subjectId: o.subjectId } : {}), ...(o.topicId ? { topicId: o.topicId } : {}) },
     ]);
     setQuery("");
-    setActive(0);
+    setActive(-1);
     inputRef.current?.focus();
   }
   function addCustom() {
     if (!typed) return;
-    onChange([...value, { id: uid("tc"), name: typed.slice(0, 160) }]);
+    onChange([...value, { id: uid("tc"), name: typed, ...(subjectId ? { subjectId } : {}) }]);
     setQuery("");
-    setActive(0);
+    setActive(-1);
   }
 
   return (
@@ -94,6 +89,7 @@ export function TopicPicker({
                 <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-paper/35" aria-hidden />
               )}
               <span className="truncate">{c.name}</span>
+              {c.subjectId && !c.topicId && <span className="shrink-0 text-accent">New</span>}
               {c.subjectId && (
                 <span className="hidden shrink-0 text-paper/45 sm:inline">· {subjectName.get(c.subjectId) ?? ""}</span>
               )}
@@ -110,6 +106,14 @@ export function TopicPicker({
         </ul>
       )}
 
+      <label className="block space-y-1 text-xs text-paper/65">
+        <span>Topic subject</span>
+        <Select value={subjectId} onChange={(event) => { setSelection(event.target.value); setActive(-1); }}>
+          <option value="">All subjects · new topics stay unassigned</option>
+          {subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
+        </Select>
+      </label>
+
       <div className="relative">
         <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-paper/35" />
         <input
@@ -117,7 +121,7 @@ export function TopicPicker({
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
-            setActive(0);
+            setActive(-1);
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
@@ -126,14 +130,19 @@ export function TopicPicker({
             if (e.key === "ArrowDown") {
               e.preventDefault();
               setOpen(true);
-              setActive((a) => Math.min(total - 1, a + 1));
+              setActive((a) => Math.max(0, Math.min(total - 1, a + 1)));
             } else if (e.key === "ArrowUp") {
               e.preventDefault();
               setActive((a) => Math.max(0, a - 1));
             } else if (e.key === "Enter") {
               e.preventDefault();
-              if (active < options.length && options[active]) pick(options[active]);
-              else if (showCustom) addCustom();
+              if (!open || deferred !== query) return;
+              if (options[active]) pick(options[active]);
+              else if (showCustom && (active < 0 || active === options.length)) addCustom();
+              else if (exact.length === 1) {
+                const matched = options.find((option) => option.topicId === exact[0].id);
+                if (matched) pick(matched);
+              }
             } else if (e.key === "Escape") {
               setOpen(false);
             }
@@ -142,11 +151,19 @@ export function TopicPicker({
           aria-expanded={open && total > 0}
           aria-controls={listId}
           aria-autocomplete="list"
+          aria-label="Search or enter a topic"
+          aria-activedescendant={open && active >= 0 && active < total ? `${listId}-${active}` : undefined}
           placeholder="Search the syllabus or type a topic…"
           className="field w-full rounded-xl border border-line bg-paper/[0.03] py-2.5 pl-10 pr-3.5 text-sm text-paper placeholder:text-paper/40 transition-all focus:border-accent/60 focus:bg-card focus:outline-none focus:ring-4 focus:ring-accent/10"
         />
       </div>
 
+      {open && exact.length > 1 && (
+        <p className="text-xs text-warning" role="status">Several syllabus topics have this name. Choose the intended topic.</p>
+      )}
+      {open && typed.length > 160 && (
+        <p className="text-xs text-warning" role="status">Keep a new topic name to 160 characters.</p>
+      )}
       {open && total > 0 && (
         <ul
           id={listId}
@@ -159,7 +176,7 @@ export function TopicPicker({
             </li>
           )}
           {options.map((o, i) => (
-            <li key={o.key} role="option" aria-selected={i === active}>
+            <li key={o.key} id={`${listId}-${i}`} role="option" aria-selected={i === active}>
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
@@ -191,7 +208,7 @@ export function TopicPicker({
             </li>
           ))}
           {showCustom && (
-            <li role="option" aria-selected={active === options.length}>
+            <li id={`${listId}-${options.length}`} role="option" aria-selected={active === options.length}>
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
@@ -204,7 +221,7 @@ export function TopicPicker({
               >
                 <Plus className="h-3.5 w-3.5 shrink-0 text-accent" />
                 <span className="min-w-0 truncate">
-                  Add “<span className="font-medium text-paper">{typed}</span>” as your own topic
+                  Add “<span className="font-medium text-paper">{typed}</span>” {subjectId ? `under ${subjectName.get(subjectId)}` : "without a subject"}
                 </span>
               </button>
             </li>

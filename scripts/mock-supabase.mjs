@@ -825,7 +825,7 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/__mock/snapshot") {
       const r = await asAdmin(() =>
         db.query(
-          "select s.data, s.version::int as version from public.chronicle_state s join auth.users u on u.id = s.user_id where u.email = $1",
+          "select s.data, s.version::int as version, s.schema_version from public.chronicle_state s join auth.users u on u.id = s.user_id where u.email = $1",
           [String(url.searchParams.get("email") ?? "").toLowerCase()],
         ),
       );

@@ -136,13 +136,9 @@ export function isCompleted(r: Review): boolean {
 
 const mockPct = (score: number, max: number) => (max > 0 ? (score / max) * 100 : null);
 
-interface Planned {
-  planned: number;
-  completed: number;
-  deferred: number;
-  open: number;
+type Planned = PerformanceSnapshot["roadmap"] & {
   unfinished: { title: string; href: string }[];
-}
+};
 
 /**
  * The activities planned for the period: a week plan's activities when its
@@ -153,7 +149,6 @@ function plannedIn(plans: PerformanceData["plans"], start: ISODate, end: ISODate
   const included = new Map<string, { planId: string; item: NonNullable<PerformanceData["plans"][number]["items"]>[number] }>();
   for (const plan of plans) {
     for (const item of plan.items ?? []) {
-      if (item.kind !== "activity") continue;
       const inside = item.targetDate
         ? item.targetDate >= start && item.targetDate <= end
         : plan.level === "week" && overlapDays(plan.start, plan.end, start, end) > 0;
@@ -163,6 +158,14 @@ function plannedIn(plans: PerformanceData["plans"], start: ISODate, end: ISODate
   const out: Planned = { planned: 0, completed: 0, deferred: 0, open: 0, unfinished: [] };
   for (const { planId, item } of included.values()) {
     if (item.carriedTo && included.has(`${item.carriedTo.planId}:${item.carriedTo.itemId}`)) continue;
+    if (item.kind !== "activity") {
+      const field = item.kind === "objective" ? "objectives" : "milestones";
+      const counts = out[field] ?? { planned: 0, completed: 0 };
+      counts.planned++;
+      if (item.status === "completed") counts.completed++;
+      out[field] = counts;
+      continue;
+    }
     out.planned++;
     if (item.status === "completed") out.completed++;
     else if (item.status === "deferred") out.deferred++;
@@ -214,7 +217,7 @@ function measureOnly(data: PerformanceData, ctx: HabitContext, p: ReviewPeriod, 
     .sort((a, b) => b.hours - a.hours);
   const best = [...active].sort((a, b) => b.totalHours - a.totalHours)[0];
 
-  const planned = plannedIn(data.plans, start, end < start ? start : p.endDate);
+  const { unfinished, ...roadmap } = plannedIn(data.plans, start, end < start ? start : p.endDate);
 
   // Revision passes through the same event layer as the habits: a pass logged
   // in the journal and marked on the Revision page is one pass.
@@ -249,7 +252,7 @@ function measureOnly(data: PerformanceData, ctx: HabitContext, p: ReviewPeriod, 
     sessions,
     topicsCompleted: entries.reduce((sum, e) => sum + countCompletedTopics(e), 0),
     subjects,
-    roadmap: { planned: planned.planned, completed: planned.completed, deferred: planned.deferred, open: planned.open },
+    roadmap,
     revision: {
       passes,
       dueNow: data.revisions.filter((r) => r.nextDue <= today).length,
@@ -266,7 +269,7 @@ function measureOnly(data: PerformanceData, ctx: HabitContext, p: ReviewPeriod, 
     exercise: { days: moved.length, minutes: moved.reduce((n, e) => n + (e.exerciseMinutes ?? 0), 0) },
     bestDay: best ? { date: best.date, hours: round(best.totalHours, 1) } : null,
     habitRows,
-    unfinished: planned.unfinished,
+    unfinished,
   };
 }
 
@@ -367,7 +370,16 @@ export function summarize(s: PerformanceSnapshot, typeWord = "period"): Observat
       href: "/roadmap",
       tone: s.roadmap.completed === s.roadmap.planned ? "good" : s.roadmap.open > s.roadmap.completed ? "bad" : undefined,
     });
-  } else out.push({ kind: "missing", text: `No Roadmap activities were planned for this ${typeWord}.`, href: "/roadmap" });
+  } else if (!s.roadmap.objectives && !s.roadmap.milestones) {
+    out.push({ kind: "missing", text: `No Roadmap activities were planned for this ${typeWord}.`, href: "/roadmap" });
+  }
+  for (const [key, label] of [["objectives", "objectives completed"], ["milestones", "milestones reached"]] as const) {
+    const counts = s.roadmap[key];
+    if (counts?.planned) out.push({
+      kind: "planned", href: "/roadmap",
+      text: `${counts.completed} of ${counts.planned} ${label}.`,
+    });
+  }
 
   // Revision
   if (s.revision.passes > 0) out.push({ kind: "recorded", text: `${plural(s.revision.passes, "revision pass", "revision passes")}.`, href: "/revision", tone: "good" });

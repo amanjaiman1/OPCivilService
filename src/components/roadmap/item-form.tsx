@@ -85,6 +85,7 @@ export function ItemForm({ request, onClose }: { request: ItemFormRequest | null
   const show = (k: keyof typeof errors) => (touched ? errors[k] : undefined);
   const goal = goals.find((g) => g.id === draft.goalId);
   const isMilestone = draft.kind === "milestone";
+  const label = isMilestone ? "Milestone" : draft.kind === "objective" ? "Objective" : "Activity";
   const carriedOn = plan ? isCarried(plans, draft) : false;
   const from = findItem(plans, draft.carriedFrom);
   const to = findItem(plans, draft.carriedTo);
@@ -128,6 +129,7 @@ export function ItemForm({ request, onClose }: { request: ItemFormRequest | null
   // "17 Nov 2026 at 9:00 AM", on the clock this person chose.
   const completedOn = (ts: string) => {
     const at = new Date(ts);
+    if (draft.completedOn && draft.completedOn !== toISODate(at)) return formatDay(draft.completedOn);
     if (Number.isNaN(at.getTime())) return null;
     const hhmm = `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`;
     return `${formatDay(toISODate(at))} at ${formatClock(hhmm, clock)}`;
@@ -137,7 +139,7 @@ export function ItemForm({ request, onClose }: { request: ItemFormRequest | null
     <Modal
       open
       onClose={onClose}
-      title={isNew ? (isMilestone ? "New milestone" : "New activity") : isMilestone ? "Milestone" : "Activity"}
+      title={isNew ? `New ${label.toLowerCase()}` : label}
       description={readOnly ? `In ${planName(plan)}, which is archived. Restore it to make changes.` : `In ${planName(plan)}`}
       className="sm:max-w-xl"
       footer={
@@ -163,7 +165,7 @@ export function ItemForm({ request, onClose }: { request: ItemFormRequest | null
       {/* A disabled fieldset turns every control in it off at once; links still work. */}
       <fieldset disabled={readOnly} className="m-0 min-w-0 space-y-5 border-0 p-0">
         <div>
-          <Field label={isMilestone ? "Milestone" : "Activity"}>
+          <Field label={label}>
             <Input
               value={draft.title}
               onChange={(e) => patch({ title: e.target.value })}
@@ -251,14 +253,14 @@ export function ItemForm({ request, onClose }: { request: ItemFormRequest | null
         ) : (
           <>
             <div className="grid gap-4 sm:grid-cols-2">
-              <div>
+              {draft.kind === "activity" && <div>
                 <p className="mb-2 text-[0.78rem] font-semibold tracking-snugg text-paper/60">Priority</p>
                 <Segmented
                   value={draft.priority ?? "Medium"}
                   onChange={(v) => patch({ priority: v as PlanPriority })}
                   options={PLAN_PRIORITIES.map((p) => ({ label: p, value: p }))}
                 />
-              </div>
+              </div>}
               <Field label="Status" hint={statusLocked ? "Carried forward. Bring it back here to change it." : undefined}>
                 <Select
                   value={draft.status}

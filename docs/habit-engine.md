@@ -33,6 +33,21 @@ Only structured records count. Free text (journal notes, wins, a diary entry, a
 goal note) never does, a Roadmap activity counts only once it is marked
 completed (on the day it was), and goals never count towards a habit.
 
+## Daily revision
+
+Choosing the Revision category for a new habit defaults to one automatic
+revision on each scheduled day. A custom target can be set for more passes
+or a weekly total. Existing manual habits and custom revision targets keep
+their settings.
+
+A linked journal log and its queue pass share a daily identity. Unlinked
+revision sessions use normalized names and deduplicate against a unique
+same-day queue pass. A failed recall still counts as a revision attempt.
+Correcting a journal-only session changes its activity credit. An independent
+Revision-page pass stays counted. Existing schedules and legacy revision
+history remain available. Habits, streaks, reminders, Daily Capture,
+dashboard widgets, Performance Review and Study Coach use the shared events.
+
 ## How a day is worked out
 
 For each day, `evaluateDay`:

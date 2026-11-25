@@ -49,6 +49,11 @@ function Figure({
 
 export function FigureGrid({ s, typeWord = "period" }: { s: PerformanceSnapshot; typeWord?: string }) {
   const p = s.previous;
+  const planDetails = [
+    s.roadmap.planned ? "activities completed" : undefined,
+    s.roadmap.objectives ? `${s.roadmap.objectives.completed}/${s.roadmap.objectives.planned} objectives` : undefined,
+    s.roadmap.milestones ? `${s.roadmap.milestones.completed}/${s.roadmap.milestones.planned} milestones` : undefined,
+  ].filter(Boolean).join(" · ");
   const was = (v: number | null | undefined, unit = "") => (p && v !== null && v !== undefined ? `was ${round(v, 1)}${unit}` : undefined);
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -70,7 +75,7 @@ export function FigureGrid({ s, typeWord = "period" }: { s: PerformanceSnapshot;
         value={s.roadmap.planned ? `${s.roadmap.completed} of ${s.roadmap.planned}` : "–"}
         now={s.roadmap.completed}
         before={p?.roadmapCompleted}
-        foot={s.roadmap.planned ? "activities completed" : `nothing planned this ${typeWord}`}
+        foot={planDetails || `nothing planned this ${typeWord}`}
       />
       <Figure icon={Gauge} label="Mocks" value={`${s.mocks.taken}`} now={s.mocks.taken} before={p?.mocksTaken} foot={s.mocks.avgPct !== null ? `average ${s.mocks.avgPct}%` : "none taken"} />
       <Figure

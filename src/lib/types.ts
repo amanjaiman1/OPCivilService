@@ -286,6 +286,7 @@ export interface MockTest {
 export interface RevisionItem {
   id: string;
   subjectId: string;
+  topicId?: string;
   topic: string;
   addedOn: ISODate;
   lastRevised?: ISODate;
@@ -300,6 +301,8 @@ export interface RevisionItem {
    * pass on that day.
    */
   passes?: ISODate[];
+  /** Passes whose activity is sourced from the journal, unless also confirmed in Revision. */
+  journalPasses?: Record<ISODate, "journal" | "confirmed">;
 }
 
 /* ── Current Affairs Vault ───────────────────────────────────── */
@@ -801,7 +804,14 @@ export interface PerformanceSnapshot {
   sessions: number;
   topicsCompleted: number;
   subjects: { id: string; name: string; hours: number; share: number }[];
-  roadmap: { planned: number; completed: number; deferred: number; open: number };
+  roadmap: {
+    planned: number;
+    completed: number;
+    deferred: number;
+    open: number;
+    objectives?: { planned: number; completed: number };
+    milestones?: { planned: number; completed: number };
+  };
   revision: { passes: number; dueNow: number; overdue: number };
   habits: { scheduled: number; kept: number; rate: number | null };
   goals: { active: number; completed: number; milestonesDone: number };
@@ -1000,7 +1010,7 @@ export interface CoachLog {
 export type PlanLevel = "year" | "month" | "week";
 
 /** A piece of planned work, or a checkpoint to reach by a date. */
-export type PlanItemKind = "activity" | "milestone";
+export type PlanItemKind = "activity" | "milestone" | "objective";
 
 export type PlanItemStatus = "notStarted" | "inProgress" | "completed" | "deferred";
 
@@ -1037,12 +1047,26 @@ export interface PlanItem {
   notes?: string;
   /** When it was marked completed (ISO timestamp). Cleared if reopened. */
   completedAt?: string;
-  /** Journal days deliberately linked to this activity. */
+  /** The calendar day the work was completed, selected in Daily Capture or on the Roadmap. */
+  completedOn?: ISODate;
+  /** Journal days deliberately linked to this item. */
   journalDates?: ISODate[];
   carriedFrom?: PlanItemRef;
   carriedTo?: PlanItemRef;
   /** ISO timestamp. */
   createdAt: string;
+}
+
+export interface PlanReviewSnapshot {
+  objectives: string[];
+  activities: string[];
+  milestones: string[];
+  remaining: string[];
+  deferred: string[];
+  carried: string[];
+  journalDays: number;
+  studyHours: number;
+  topics: number;
 }
 
 /** Looking back at a finished week, month or year. */
@@ -1052,6 +1076,7 @@ export interface PlanReview {
   nextPriorities?: string;
   /** ISO timestamp of the last save. */
   reviewedAt?: string;
+  snapshot?: PlanReviewSnapshot;
 }
 
 /**
@@ -1071,6 +1096,7 @@ export interface RoadmapPlan {
   /** The plan this one sits under. Never deleted or changed for you. */
   parentId?: string;
   focus?: string;
+  /** Strategic text for year/month plans. Legacy weekly text is migrated into items. */
   objectives?: string[];
   outcomes?: string;
   notes?: string;

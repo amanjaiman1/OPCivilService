@@ -1,6 +1,7 @@
 "use client";
 
 import { useChronicle, readCloudSnapshot, SNAPSHOT_KEYS, type CloudSnapshot } from "../store";
+import { normalizePlans } from "../roadmap";
 import type { LocalStoreAdapter, Snapshot } from "./engine";
 
 /**
@@ -13,6 +14,7 @@ import type { LocalStoreAdapter, Snapshot } from "./engine";
 export function chronicleStoreAdapter(accountId: string): LocalStoreAdapter {
   return {
     read: () => readCloudSnapshot() as unknown as Snapshot,
+    prepareMerge: (snapshot) => snapshot.plans === undefined ? snapshot : { ...snapshot, plans: normalizePlans(snapshot.plans) },
     readStamp: () => {
       const stamp = useChronicle.getState()._sync;
       return stamp && stamp.accountId === accountId && Number.isFinite(stamp.version) && stamp.version > 0

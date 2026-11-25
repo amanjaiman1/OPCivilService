@@ -304,11 +304,15 @@ export function HabitForm({
   const [draft, setDraft] = useState<Draft>(initial);
   const [chosenPreset, setChosenPreset] = useState<string | null>(preset?.key ?? null);
   const [submitted, setSubmitted] = useState(false);
+  const [showRevisionTarget, setShowRevisionTarget] = useState(false);
+  const [trackingChosen, setTrackingChosen] = useState(false);
   useEffect(() => {
     if (!open) return;
     setDraft(initial);
     setChosenPreset(preset?.key ?? null);
     setSubmitted(false);
+    setShowRevisionTarget(false);
+    setTrackingChosen(false);
   }, [open, initial, preset?.key]);
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((d) => ({ ...d, [key]: value }));
@@ -317,6 +321,7 @@ export function HabitForm({
   const shown: Errors = submitted ? errors : {};
   const m = metricOf(draft);
   const auto = draft.tracking !== "manual";
+  const standardRevision = m.id === "revisionPasses" && draft.scheduleKind !== "weeklyTotal" && Number(draft.amount) === 1;
 
   // Switching what's measured resets what only made sense for the old one.
   const chooseMetric = (id: HabitMetric) =>
@@ -336,12 +341,22 @@ export function HabitForm({
     setDraft((d) => ({ ...d, source }));
     chooseMetric(metricsFor(source)[0].id);
   };
-  const chooseTracking = (tracking: Tracking) =>
+  function chooseTracking(tracking: Tracking) {
+    setTrackingChosen(true);
     setDraft((d) => ({
       ...d,
       tracking,
       scheduleKind: tracking === "manual" && d.scheduleKind === "weeklyTotal" ? "daily" : d.scheduleKind,
     }));
+  }
+
+  function chooseCategory(category: HabitCategory) {
+    if (category === "Revision" && !editing && !trackingChosen && draft.tracking === "manual") {
+      setDraft((d) => ({ ...d, category, tracking: "auto", source: "revision", metric: "revisionPasses", amount: "1" }));
+      return;
+    }
+    set("category", category);
+  }
   const applyPreset = (p: HabitPreset) => {
     setDraft(draftFromPreset(p, today, dailyHourTarget));
     setChosenPreset(p.key);
@@ -526,7 +541,7 @@ export function HabitForm({
           </Field>
           <div className="grid gap-4 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
             <Field label="Category" hint="Groups it with similar habits.">
-              <Select value={draft.category} onChange={(e) => set("category", e.target.value as HabitCategory)}>
+              <Select value={draft.category} onChange={(e) => chooseCategory(e.target.value as HabitCategory)}>
                 {CATEGORIES.map((c) => (
                   <option key={c} value={c}>
                     {c}
@@ -644,7 +659,13 @@ export function HabitForm({
             </div>
           )}
 
-          {auto &&
+          {auto && standardRevision && !showRevisionTarget && (
+            <div className="space-y-1">
+              <p className="text-sm text-paper/75">One revision completes this habit automatically on a scheduled day.</p>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setShowRevisionTarget(true)}>Set a custom target</Button>
+            </div>
+          )}
+          {auto && (!standardRevision || showRevisionTarget) &&
             (m.unit === "time" ? (
               <div className="max-w-xs">
                 <TimeField

@@ -69,6 +69,12 @@ const SET_PATHS = new Set([
  */
 const LATEST_PATHS = new Set(["plans.updatedAt", "reflections.updatedAt", "reviews.updatedAt"]);
 
+/** A direct revision survives a second device logging the same journal pass. */
+function confirmedRevision(path: string, a: unknown, b: unknown): "confirmed" | null {
+  return policyPath(path).startsWith("revisions.journalPasses.") && ((a === "confirmed" && b === "journal") || (b === "confirmed" && a === "journal"))
+    ? "confirmed" : null;
+}
+
 function latestOf(path: string, a: unknown, b: unknown): string | null {
   if (!LATEST_PATHS.has(policyPath(path)) || typeof a !== "string" || typeof b !== "string") return null;
   return a > b ? a : b;
@@ -165,9 +171,15 @@ export function merge3<T>(base: T, local: T, remote: T): MergeResult<T> {
 
 function m3(base: unknown, local: unknown, remote: unknown, path: string, out: MergeConflict[]): unknown {
   if (deepEqual(local, remote)) return local;
+  const confirmed = confirmedRevision(path, local, remote);
+  if (confirmed) return confirmed;
   if (deepEqual(local, base)) return remote; // only the other device changed it
   if (deepEqual(remote, base)) return local; // only this device changed it
 
+  if (policyPath(path) === "plans.review.snapshot" && local !== undefined && remote !== undefined) {
+    out.push({ path, kept: local, discarded: remote });
+    return local;
+  }
   // Both changed it, differently. Merge inside when the shapes allow.
   if (isObj(local) && isObj(remote)) {
     const b = isObj(base) ? base : {};
@@ -234,8 +246,15 @@ function m2(
   out: MergeConflict[],
 ): unknown {
   if (deepEqual(local, remote)) return local;
+  const confirmed = confirmedRevision(path, local, remote);
+  if (confirmed) return confirmed;
   if (local === undefined) return remote;
   if (remote === undefined) return local;
+  if (policyPath(path) === "plans.review.snapshot") {
+    const kept = prefer === "local" ? local : remote;
+    out.push({ path, kept, discarded: prefer === "local" ? remote : local });
+    return kept;
+  }
 
   if (isObj(local) && isObj(remote)) {
     const result: Obj = {};

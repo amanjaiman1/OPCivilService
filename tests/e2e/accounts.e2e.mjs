@@ -248,6 +248,115 @@ async function dashboardGreets(page, firstName) {
   await page.getByText(new RegExp(`, ${firstName}\\.`)).first().waitFor();
 }
 
+async function phaseOne(page, phone, student) {
+  await signUp(page, student.name, student.email);
+  await onboard(page, student.name);
+  await passSleepPromptIfShown(page);
+  await passTourIfShown(page);
+  await page.goto(`${APP}/roadmap`);
+  await page.getByRole("button", { name: "Create a plan" }).first().click();
+  const form = page.getByRole("dialog", { name: "Create a plan" });
+  await form.getByRole("radio", { name: /^A week/ }).click();
+  await form.getByLabel("Title", { exact: true }).fill("Independent Polity week");
+  for (const [index, title] of ["Complete Federal practice drill", "Write a weekly answer"].entries()) {
+    await form.getByRole("button", { name: "Add an objective" }).click();
+    await form.getByRole("textbox", { name: `Objective ${index + 1}` }).fill(title);
+  }
+  await form.getByRole("button", { name: "Add a milestone" }).click();
+  await form.getByRole("textbox", { name: "Milestone 1" }).fill("Finish the first practice set");
+  await form.getByRole("button", { name: "Create plan" }).click();
+  await page.getByRole("heading", { name: "Independent Polity week" }).waitFor();
+
+  const first = await waitFor("standalone plan in the cloud", async () => {
+    const snapshot = await cloudOf(student.email);
+    return snapshot?.data?.plans?.find((plan) => plan.title === "Independent Polity week");
+  });
+  check(first.items.filter((item) => item.kind === "objective").length === 2, "weekly objectives were not saved as items");
+  await page.getByRole("button", { name: "Mark “Write a weekly answer” complete" }).click();
+  await page.getByRole("button", { name: "Mark “Write a weekly answer” not done" }).click();
+
+  await page.goto(`${APP}/journal?new=1`);
+  const targets = page.getByRole("region", { name: "Your weekly targets" });
+  await targets.getByRole("checkbox", { name: /^Complete Federal practice drill/ }).check();
+  await targets.getByRole("checkbox", { name: /^Finish the first practice set/ }).check();
+  await page.getByLabel("Topic subject").selectOption({ label: "Polity & Governance" });
+  await page.getByRole("combobox", { name: "Search or enter a topic" }).fill("Federal practice drill");
+  await page.getByRole("option", { name: /Add .Federal practice drill/ }).click();
+  await targets.getByText(/Matches a topic you logged/).waitFor();
+  await page.waitForFunction(() => Object.keys(sessionStorage).some((key) => key.startsWith("upsc-capture-draft:") && sessionStorage.getItem(key)?.includes("weeklyTargets")));
+  await page.reload();
+  await targets.getByRole("checkbox", { name: /^Complete Federal practice drill/, checked: true }).waitFor();
+  if (process.env.OPC_PHASE_EVIDENCE) {
+    await targets.screenshot({ path: join(process.env.OPC_PHASE_EVIDENCE, "weekly-targets-desktop.png") });
+  }
+  await page.getByRole("button", { name: "Save All Changes" }).click();
+  const synced = await waitFor("topic, journal, revision and plan saved together", async () => {
+    const snapshot = await cloudOf(student.email);
+    const data = snapshot?.data;
+    const item = data?.plans?.find((plan) => plan.id === first.id)?.items?.find((record) => record.kind === "objective" && record.status === "completed");
+    const topic = data?.subjects?.flatMap((subject) => subject.topics).find((record) => record.name === "Federal practice drill");
+    return item && topic && data?.revisions?.some((revision) => revision.topicId === topic.id) ? { data, item, topic } : null;
+  });
+  check(synced.topic.status === "learning", "Subject Progress did not receive study credit");
+  check(synced.item.journalDates.includes(today()), "weekly objective did not link to today's journal");
+  check(synced.data.goals.length === 0, "the workflow made a goal");
+
+  await page.goto(`${APP}/roadmap?plan=${first.id}`);
+  await page.getByRole("heading", { name: "Objectives · 1 of 2 complete" }).waitFor();
+  await page.getByText("Milestones reached · 1", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "Save review", exact: true }).click();
+  await page.getByText(/Saved activity snapshot/).waitFor();
+
+  const mobile = await phone.newPage();
+  await mobile.setViewportSize({ width: 390, height: 844 });
+  await signIn(mobile, student.email);
+  await dashboardGreets(mobile, student.name.split(" ")[0]);
+  await mobile.goto(`${APP}/roadmap?plan=${first.id}`);
+  await mobile.getByRole("heading", { name: "Objectives · 1 of 2 complete" }).waitFor();
+  const complete = mobile.getByRole("button", { name: "Mark “Complete Federal practice drill” not done" });
+  const box = await complete.boundingBox();
+  check(box?.height >= 44 && box?.width >= 44, "objective check control is too small to use on a phone");
+  check(await mobile.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), "Roadmap overflows horizontally on a phone");
+  if (process.env.OPC_PHASE_EVIDENCE) {
+    await mobile.locator("section").filter({ has: mobile.getByRole("heading", { name: "Objectives · 1 of 2 complete" }) }).first()
+      .screenshot({ path: join(process.env.OPC_PHASE_EVIDENCE, "weekly-objectives-mobile.png") });
+  }
+  await complete.click();
+  await waitFor("phone completion change synced", async () => {
+    const snapshot = await cloudOf(student.email);
+    return snapshot?.data?.plans?.find((plan) => plan.id === first.id)?.items?.find((item) => item.id === synced.item.id)?.status === "notStarted";
+  });
+
+  await page.goto(`${APP}/habits`);
+  await page.getByRole("button", { name: "Create a habit" }).click();
+  await page.getByLabel("Habit name").fill("Recall each day");
+  await page.getByLabel("Category").selectOption("Revision");
+  await page.getByText("One revision completes this habit automatically on a scheduled day.").waitFor();
+  await page.getByRole("button", { name: "Create habit", exact: true }).click();
+  await page.getByRole("heading", { name: "Recall each day" }).waitFor();
+  await page.goto(`${APP}/revision`);
+  await page.getByRole("button", { name: "Edit Federal practice drill" }).click();
+  await page.getByLabel("Next due").fill(today());
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await page.getByRole("button", { name: "Recalled", exact: true }).click();
+  await page.getByText(/“Federal practice drill” recalled/).waitFor();
+  const pass = await waitFor("revision pass in the cloud", async () => {
+    const snapshot = await cloudOf(student.email);
+    return snapshot?.data?.revisions?.find((item) => item.topicId === synced.topic.id && item.passes?.includes(today()));
+  });
+  check(pass.passes.length === 1, "Revision wrote more than one pass on the day");
+  await page.goto(`${APP}/habits`);
+  await page.getByRole("heading", { name: "Recall each day" }).waitFor();
+  await page.getByText(/From Revision/, { exact: false }).first().waitFor();
+
+  await page.goto(`${APP}/goals`);
+  await page.getByRole("button", { name: "New goal", exact: true }).click();
+  const goal = page.getByRole("dialog", { name: "New goal" });
+  await goal.getByLabel("Name", { exact: true }).fill("Read five hours this week");
+  await goal.getByRole("button", { name: "Add goal", exact: true }).click();
+  await page.getByRole("region", { name: "Study" }).getByText("Read five hours this week", { exact: true }).waitFor();
+}
+
 /* ── run ───────────────────────────────────────────────────────── */
 
 async function main() {
@@ -268,6 +377,12 @@ async function main() {
   const ids = {};
 
   try {
+    if (process.argv.includes("--phase-01")) {
+      await scenario("Phase 01 works on desktop and mobile", () => phaseOne(page, phone, A));
+      await browser.close();
+      return;
+    }
+
     await scenario("1. Registration gives each account its own clean chronicle", async () => {
       // "/" is the public site; the app itself sends a signed-out visitor to welcome.
       await page.goto(`${APP}/dashboard`);
@@ -655,7 +770,7 @@ async function main() {
           body: JSON.stringify({
             p_data: { ...now.data, themeMode: "blue", palette: "lagoon", material: "glass" },
             p_base_version: now.version,
-            p_schema: 17,
+            p_schema: now.schema_version,
             p_device: "e2e-older-snapshot",
           }),
         });

@@ -264,7 +264,22 @@ export function suggestedCategory(metric: GoalMetric | undefined): GoalCategory 
 }
 
 export function goalCategory(goal: Goal): GoalCategory {
-  return goal.category ?? suggestedCategory(goal.metric);
+  return goal.category && GOAL_CATEGORIES.includes(goal.category) ? goal.category : suggestedCategory(goal.metric);
+}
+
+/** Preserve the caller's search/sort order within the product's category order. */
+export function groupGoalProgress<T extends { goal: Goal }>(goals: T[]) {
+  const groups = new Map<GoalCategory, T[]>();
+  for (const progress of goals) {
+    const category = goalCategory(progress.goal);
+    const records = groups.get(category) ?? [];
+    records.push(progress);
+    groups.set(category, records);
+  }
+  return GOAL_CATEGORIES.flatMap((category) => {
+    const records = groups.get(category);
+    return records ? [{ category, records }] : [];
+  });
 }
 
 export function goalPriority(goal: Goal): GoalPriority {

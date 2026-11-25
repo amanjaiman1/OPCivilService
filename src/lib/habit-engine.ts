@@ -9,7 +9,7 @@ import type {
   Profile,
   TimeFormat,
 } from "./types";
-import { completedTopicsOf } from "./topics";
+import { completedTopicsOf, normName } from "./topics";
 import { clockMinutes, countedSleepHours, formatClock } from "./sleep";
 import { addDays, normalizeWeekStart, weekStartOf } from "./roadmap";
 import { daysBetween, fromISODate, toISODate } from "./utils";
@@ -126,6 +126,14 @@ export function activityEvents(data: ActivityData): ActivityEvent[] {
   const subjectName = new Map(data.subjects.map((s) => [s.id, s.name]));
   const nameOf = (id?: string) => (id && subjectName.get(id)) || "Unassigned";
 
+  const revisionsById = new Map(data.revisions.map((item) => [item.id, item]));
+  const revisionNames = new Map<string, typeof data.revisions>();
+  for (const item of data.revisions) {
+    const name = normName(item.topic);
+    const matches = revisionNames.get(name) ?? [];
+    matches.push(item);
+    revisionNames.set(name, matches);
+  }
   for (const entry of data.journal) {
     const href = `/journal/${entry.date}`;
     // One event per subject per day: two blocks of the same subject add up.
@@ -152,7 +160,7 @@ export function activityEvents(data: ActivityData): ActivityEvent[] {
     }
     for (const t of completedTopicsOf(entry)) {
       add({
-        id: `journal:${entry.date}:topic:${t.id}`,
+        id: `journal:${entry.date}:topic:${t.topicId ?? t.id}`,
         source: "journal",
         sourceId: entry.date,
         kind: "topic",
@@ -164,17 +172,26 @@ export function activityEvents(data: ActivityData): ActivityEvent[] {
       });
     }
     (entry.revisionSessions ?? []).forEach((session, i) => {
-      // A pass on a queue item has the same id wherever it was recorded, so
-      // the journal day and the Revision page can't count it twice.
+      const name = normName(session.topic);
+      const candidates = revisionNames.get(name)?.filter((item) =>
+        (!session.subjectId || item.subjectId === session.subjectId) && revisionPassDates(item).includes(entry.date),
+      );
+      const match = session.revisionItemId
+        ? revisionsById.get(session.revisionItemId)
+        : candidates?.length === 1 ? candidates[0] : undefined;
+      const queueId = session.revisionItemId ?? match?.id;
+      if (!queueId && !name) return;
       add({
-        id: session.revisionItemId ? `revision:${session.revisionItemId}:${entry.date}` : `journal:${entry.date}:revision:${i}`,
-        source: session.revisionItemId ? "revision" : "journal",
-        sourceId: session.revisionItemId ?? entry.date,
+        id: queueId
+          ? `revision:${queueId}:${entry.date}`
+          : `journal:${entry.date}:revision:${JSON.stringify([session.subjectId ?? "", name])}`,
+        source: queueId ? "revision" : "journal",
+        sourceId: queueId ?? entry.date,
         kind: "revisionPass",
         date: entry.date,
         quantity: 1,
-        subjectId: session.subjectId,
-        label: session.topic || "A revision session",
+        subjectId: match?.subjectId ?? session.subjectId,
+        label: session.topic || match?.topic || "A revision session",
         href,
       });
       if (typeof session.minutes === "number" && session.minutes > 0) {
@@ -195,6 +212,7 @@ export function activityEvents(data: ActivityData): ActivityEvent[] {
 
   for (const item of data.revisions) {
     for (const date of revisionPassDates(item)) {
+      if (item.journalPasses?.[date] === "journal") continue;
       add({
         id: `revision:${item.id}:${date}`,
         source: "revision",
@@ -238,14 +256,14 @@ export function activityEvents(data: ActivityData): ActivityEvent[] {
     for (const item of plan.items ?? []) {
       // Only finished work counts: a planned or open activity never does.
       if (item.kind !== "activity" || item.status !== "completed" || !item.completedAt) continue;
-      const done = new Date(item.completedAt);
-      if (Number.isNaN(done.getTime())) continue;
+      const at = new Date(item.completedAt);
+      if (!item.completedOn && Number.isNaN(at.getTime())) continue;
       add({
         id: `roadmap:${plan.id}:${item.id}`,
         source: "roadmap",
         sourceId: item.id,
         kind: "roadmapActivity",
-        date: toISODate(done),
+        date: item.completedOn ?? toISODate(at),
         quantity: 1,
         subjectId: item.subjectId,
         label: item.title,

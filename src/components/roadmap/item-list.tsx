@@ -78,7 +78,8 @@ export function ItemList({
   const items = useMemo(() => (plan.items ?? []).filter((i) => i.kind === kind), [plan.items, kind]);
   const full = (plan.items?.length ?? 0) >= LIMITS.items;
   const isMilestone = kind === "milestone";
-  const noun = isMilestone ? "milestone" : "activity";
+  const noun = kind;
+  const plural = kind === "activity" ? "activities" : `${kind}s`;
 
   useEffect(() => {
     if (!highlightId || !items.some((i) => i.id === highlightId)) return;
@@ -128,12 +129,17 @@ export function ItemList({
                   aria-pressed={done}
                   aria-label={done ? `Mark “${it.title}” not done` : isMilestone ? `Mark “${it.title}” reached` : `Mark “${it.title}” complete`}
                   className={cn(
-                    "mt-0.5 grid h-5 w-5 shrink-0 place-items-center border transition-colors disabled:cursor-not-allowed",
-                    isMilestone ? "rounded-full" : "rounded-md",
-                    done ? "border-positive bg-positive text-ink" : "border-paper/35 hover:border-accent",
+                    "group/check -my-2.5 -ml-2 grid min-h-11 w-11 shrink-0 place-items-center rounded-lg disabled:cursor-not-allowed",
+
                   )}
                 >
-                  {done && <Check className="h-3 w-3" />}
+                  <span className={cn(
+                    "grid h-5 w-5 place-items-center border transition-colors",
+                    isMilestone ? "rounded-full" : "rounded-md",
+                    done ? "border-positive bg-positive text-ink" : "border-paper/35 group-hover/check:border-accent",
+                  )}>
+                    {done && <Check className="h-3 w-3" />}
+                  </span>
                 </button>
                 <div className="min-w-0 flex-1">
                   <button
@@ -148,7 +154,7 @@ export function ItemList({
                     {it.title}
                   </button>
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.68rem] text-paper/60">
-                    {!isMilestone && <PriorityMark priority={it.priority} />}
+                    {kind === "activity" && <PriorityMark priority={it.priority} />}
                     {(it.targetDate || overdue) && (
                       <span className={cn(overdue && "font-semibold text-danger")}>
                         {overdue
@@ -206,7 +212,7 @@ export function ItemList({
                     </p>
                   )}
                 </div>
-                {!isMilestone && (
+                {kind === "activity" && (
                   <Select
                     value={it.status}
                     onChange={(e) => setPlanItemStatus(plan.id, it.id, e.target.value as PlanItemStatus)}
@@ -259,7 +265,7 @@ export function ItemList({
         </ul>
       )}
 
-      {readOnly && items.length === 0 && <p className="text-[0.78rem] text-paper/55">No {isMilestone ? "milestones" : "activities"}.</p>}
+      {readOnly && items.length === 0 && <p className="text-[0.78rem] text-paper/55">No {plural}.</p>}
       {!readOnly && (
       <form
         className="flex flex-col gap-2 sm:flex-row"
@@ -271,7 +277,7 @@ export function ItemList({
         <Input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder={isMilestone ? "Add a milestone…" : "Add an activity…"}
+          placeholder={`Add ${isMilestone ? "a" : "an"} ${noun}…`}
           aria-label={`New ${noun}`}
           maxLength={LIMITS.itemTitle}
           className="flex-1"
@@ -293,7 +299,7 @@ export function ItemList({
       </form>
       )}
       {full && !readOnly && <p className="text-[0.72rem] text-warning">A plan holds up to {LIMITS.items} items. Split the work across another plan.</p>}
-      {!isMilestone && !readOnly && items.length > 0 && (
+      {kind === "activity" && !readOnly && items.length > 0 && (
         <p className="text-[0.68rem] text-paper/50">
           Open an activity to add detail: description, subject, goal, notes and the journal days you did it.
         </p>
@@ -356,7 +362,7 @@ export function CarryDialog({
       open={open}
       onClose={onClose}
       title="Carry forward"
-      description={`Unfinished activities from ${planName(plan)}`}
+      description={`Unfinished work from ${planName(plan)}`}
       footer={
         result ? (
           <>
@@ -386,7 +392,7 @@ export function CarryDialog({
     >
       {result ? (
         <p className="text-sm text-paper/80" role="status">
-          {result.moved} activit{result.moved === 1 ? "y" : "ies"} carried to {planName(result.to)}. The originals stay here, marked as carried
+          {result.moved} {result.moved === 1 ? "item" : "items"} carried to {planName(result.to)}. The originals stay here, marked as carried
           forward.
         </p>
       ) : list.length === 0 ? (
@@ -404,7 +410,7 @@ export function CarryDialog({
                 {draftNext.parentId ? ` under ${planName(plans.find((p) => p.id === draftNext.parentId)!)}` : ""}.
               </>
             )}{" "}
-            Each is copied there as a new activity. Here, the original is kept and marked as carried forward.
+            Each item keeps its type in the next plan. Here, the original is kept and marked as carried forward.
           </p>
           <ul className="space-y-1.5">
             {list.map((it) => (
