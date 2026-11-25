@@ -655,7 +655,7 @@ async function main() {
           body: JSON.stringify({
             p_data: { ...now.data, themeMode: "blue", palette: "lagoon", material: "glass" },
             p_base_version: now.version,
-            p_schema: 17,
+            p_schema: 18,
             p_device: "e2e-older-snapshot",
           }),
         });

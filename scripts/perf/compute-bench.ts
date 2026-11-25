@@ -40,9 +40,9 @@ const rows: Record<string, Record<string, number>> = {};
 for (const name of ["typical", "heavy"] as DatasetName[]) {
   const data = buildDataset(name, now) as unknown as ChronicleData;
   const r: Record<string, number> = {};
-  const json = JSON.stringify({ state: data, version: 17 });
+  const json = JSON.stringify({ state: data, version: 18 });
   r["snapshot KB"] = Math.round(json.length / 1024);
-  r["JSON.stringify (persist write)"] = time(() => JSON.stringify({ state: data, version: 17 }));
+  r["JSON.stringify (persist write)"] = time(() => JSON.stringify({ state: data, version: 18 }));
   r["JSON.parse (rehydrate)"] = time(() => JSON.parse(json));
   r["notifications: evaluate + inbox"] = time(() =>
     buildInbox(evaluate(data, { now, settings: DEFAULT_NOTIFY_SETTINGS }), EMPTY_NOTIFY_STATE, today),

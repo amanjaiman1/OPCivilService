@@ -60,14 +60,17 @@ import {
 import { LifeFields, TrackedFieldsDialog, useLifeEditor } from "@/components/life/life-form";
 import { GoalsTab } from "./goals-tab";
 import { HabitTab } from "./habit-tab";
+import { WeeklyPlanToday } from "./weekly-plan-today";
 import { draftDates, readDraft, writeDraft } from "./draft-store";
 import { cn, formatDate, formatHours, toISODate } from "@/lib/utils";
+import { weeklyPlanToday } from "@/lib/plan-today";
 
 const SECTIONS: { id: CaptureSection; label: string; icon: LucideIcon }[] = [
   { id: "day", label: "Day Update", icon: NotebookPen },
   { id: "life", label: "Life", icon: Activity },
   { id: "goals", label: "Goals", icon: Target },
   { id: "habit", label: "Habit", icon: CircleCheck },
+  { id: "plan", label: "Plan", icon: CalendarDays },
 ];
 const LABEL = Object.fromEntries(SECTIONS.map((s) => [s.id, s.label])) as Record<CaptureSection, string>;
 
@@ -213,6 +216,8 @@ export function CaptureWorkspace({
     life: lifeEd.dirty,
     goals: linkDiff.length > 0 || goalIdsChanged.length > 0,
     habit: habitIdsChanged.length > 0,
+    // The Plan tab writes straight to the plan; there is no draft to save.
+    plan: false,
   };
   const anyDirty = dirty.day || dirty.life || dirty.goals || dirty.habit;
   const ready = loaded === date && journalEd.base.date === date && lifeEd.draft.date === date;
@@ -389,9 +394,21 @@ export function CaptureWorkspace({
           text: lead("habit", `${done}/${due} done`),
           done: done === due && !dirty.habit,
         };
-    return { day, life, goals: goalsView, habit };
+
+    const pt = weeklyPlanToday(plans, date);
+    const planView: SectionView = !pt.plan
+      ? { state: "na", badge: "–", progress: 0, text: "No weekly plan for this week", done: null }
+      : {
+          state: pt.allDone ? "complete" : pt.total ? "progress" : "empty",
+          badge: pt.total ? `${pt.done}/${pt.total}` : "–",
+          progress: pt.total ? pt.done / pt.total : 0,
+          text: pt.allDone ? "All done" : pt.total ? `${pt.open} open` : "Nothing planned",
+          // Advisory: an open plan never blocks finishing the day's capture.
+          done: pt.allDone ? true : null,
+        };
+    return { day, life, goals: goalsView, habit, plan: planView };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [outcome, dirty.day, dirty.life, dirty.goals, dirty.habit, savedEntry, lifeEd.entry, lifeEd.saved, tracked, goals, date, goalIdsChanged, linkDiff, habitSummary, liveHours, target]);
+  }, [outcome, dirty.day, dirty.life, dirty.goals, dirty.habit, savedEntry, lifeEd.entry, lifeEd.saved, tracked, goals, date, goalIdsChanged, linkDiff, habitSummary, liveHours, target, plans]);
 
   const applicable = SECTIONS.filter((s) => views[s.id].done !== null).length;
   const captured = SECTIONS.filter((s) => views[s.id].done === true).length;
@@ -598,6 +615,7 @@ export function CaptureWorkspace({
       case "day":
         return (
           <div className="space-y-4">
+            <WeeklyPlanToday date={date} compact onOpen={() => selectSection("plan")} />
             {journalEd.error && <Notice tone="danger">{journalEd.error}</Notice>}
             {journalEd.uploading && <Notice>Waiting for files to finish uploading…</Notice>}
             <JournalFields editor={journalEd} isEdit={Boolean(savedEntry)} variant="page" />
@@ -643,6 +661,17 @@ export function CaptureWorkspace({
             previewing={journalEd.dirty || lifeEd.dirty}
           />
         );
+      case "plan":
+        return (
+          <div className="space-y-4">
+            <PanelIntro
+              title="Your week, as planned"
+              text="This is the same weekly plan as the Roadmap. Finishing an item here updates that record; working on it only links this journal day, so nothing is marked complete by accident."
+              link={{ href: "/roadmap?tab=weeks", label: "Roadmap" }}
+            />
+            <WeeklyPlanToday date={date} />
+          </div>
+        );
     }
   };
 
@@ -666,7 +695,7 @@ export function CaptureWorkspace({
   const footer = (
     <>
       <p className="mr-auto hidden min-w-0 truncate text-[0.76rem] text-paper/55 sm:block">
-        {saving ? "Saving…" : anyDirty ? `Unsaved: ${unsavedNames.join(", ")}` : "Keys 1–4 switch tabs · Ctrl + S saves"}
+        {saving ? "Saving…" : anyDirty ? `Unsaved: ${unsavedNames.join(", ")}` : `Keys 1–${SECTIONS.length} switch tabs · Ctrl + S saves`}
       </p>
       {anyDirty && (
         <Button variant="ghost" onClick={() => void discardAll()} disabled={saving} className="hidden sm:inline-flex">
@@ -1017,19 +1046,21 @@ function CaptureTabs({
       role="tablist"
       aria-label="Daily Capture sections"
       onKeyDown={onKeyDown}
-      className="lg-clear relative isolate grid w-full grid-cols-4 gap-1 rounded-xl border border-line p-1"
+      className="lg-clear relative isolate grid w-full gap-1 rounded-xl border border-line p-1"
+      style={{ gridTemplateColumns: `repeat(${SECTIONS.length}, minmax(0, 1fr))` }}
     >
       {/* The links: a rail from each icon to the next, lit in the colours of the
           sections it joins, with light running along it from one tab to the next. */}
       {SECTIONS.slice(0, -1).map((s, i) => {
         const from = views[s.id].state;
         const to = views[SECTIONS[i + 1].id].state;
+        const share = 100 / SECTIONS.length;
         return (
           <span
             key={`link-${s.id}`}
             aria-hidden
             className="pointer-events-none absolute top-[22px] h-[3px] overflow-hidden rounded-full bg-paper/10 sm:top-[24px]"
-            style={{ left: `calc(${(i + 0.5) * 25}% + 21px)`, width: "calc(25% - 42px)" }}
+            style={{ left: `calc(${(i + 0.5) * share}% + 21px)`, width: `calc(${share}% - 42px)` }}
           >
             <span className={cn("absolute inset-0 rounded-full bg-gradient-to-r opacity-75 transition-colors duration-500", RAIL_FROM[from], RAIL_TO[to])} />
             <span

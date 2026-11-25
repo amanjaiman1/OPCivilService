@@ -42,6 +42,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { EmptyState } from "@/components/ui/misc";
 import { JournalComposer } from "@/components/journal/composer";
+import { WeeklyPlanToday } from "@/components/capture/weekly-plan-today";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   emptyEntry,
@@ -399,6 +400,12 @@ export function JournalDayView() {
                 ))}
               </div>
             </SectionCard>
+          )}
+
+          {date === today && (
+            <div className="rounded-2xl border border-line bg-paper/[0.02] p-4 sm:p-5">
+              <WeeklyPlanToday date={date} />
+            </div>
           )}
 
           {/* Everything else the day holds: files, planned work, goals, the life

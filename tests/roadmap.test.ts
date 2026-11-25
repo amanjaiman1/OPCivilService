@@ -511,7 +511,8 @@ test("plans from older devices or hand-edited backups are made consistent, the s
   assert.ok(once.some((p) => p.id === "w1~2" && p.start === "2027-01-13"), "a clashing id is renamed, not dropped");
   const m1 = once.find((p) => p.id === "m1")!;
   assert.deepEqual([m1.start, m1.end], ["2027-02-01", "2027-02-28"]);
-  assert.deepEqual(m1.objectives, ["Focus"]);
+  assert.deepEqual(m1.objectives?.map((o) => [o.title, o.status]), [["Focus", "notStarted"]], "legacy strings become records");
+  assert.match(m1.objectives![0].id, /^po_/, "the id is stable and derived, not random");
   assert.deepEqual(m1.goalIds, ["g1", "g2"]);
   assert.deepEqual([once.find((p) => p.id === "y1")!.start, once.find((p) => p.id === "y1")!.end], ["2027-01-01", "2027-12-31"], "an impossible span falls back to the calendar year");
   assert.equal(once.length, 4);

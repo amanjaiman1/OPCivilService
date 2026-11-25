@@ -86,7 +86,7 @@ test("the same file attached twice is stored once", () => {
   assert.deepEqual(store().journal.find((e) => e.date === today)!.fileIds, ["f1"], "points at the existing record");
 });
 
-test("finishing a syllabus topic credits it and can schedule its first revision", () => {
+test("finishing a syllabus topic completes it once and can schedule its first revision", () => {
   const res = store().saveJournalEntry({
     entry: entry(today, {
       completedTopics: [
@@ -98,9 +98,11 @@ test("finishing a syllabus topic credits it and can schedule its first revision"
     scheduleRevision: true,
   });
   const topics = store().subjects[0].topics;
-  assert.equal(topics.find((t) => t.id === "t-fr")!.status, "learning");
+  assert.equal(topics.find((t) => t.id === "t-fr")!.status, "mastered", "a completed topic is complete");
+  assert.equal(topics.find((t) => t.id === "t-fr")!.completedOn, today, "the completion day is recorded");
   assert.equal(topics.find((t) => t.id === "t-dpsp")!.status, "mastered", "never moved backwards");
-  assert.equal(res.topicsCredited, 1);
+  assert.equal(topics.find((t) => t.id === "t-dpsp")!.completedOn, today, "a legacy mastered topic gets its missing day filled in");
+  assert.equal(res.topicsCredited, 1, "only the topic that was not already complete is newly credited");
   assert.equal(res.revisionsScheduled, 2);
   const fr = store().revisions.find((r) => r.topic === "Fundamental Rights")!;
   assert.equal(fr.nextDue, shiftDay(today, 1), "first pass the next day");

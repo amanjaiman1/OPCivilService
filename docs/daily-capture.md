@@ -1,8 +1,9 @@
 # Daily Capture
 
 **Daily Journal** in the sidebar opens the journal at `/journal` with the
-Daily Capture form over it: a popup with four tabs for the day, saved together
-with **Save All Changes** (or Ctrl/⌘ + S). A full save closes the form;
+Daily Capture form over it: a popup with five tabs for the day. Four of them
+are saved together with **Save All Changes** (or Ctrl/⌘ + S); the Plan tab
+writes each action the moment it is taken. A full save closes the form;
 closing with unsaved edits asks first and keeps them as a draft. The journal's
 "Capture today" button opens the form again.
 
@@ -12,6 +13,7 @@ closing with unsaved edits asks first and keeps them as a draft. The journal's
 | Life | the day's Life Dashboard readings (only the tracked fields) | `upsertLifeEntry` / `deleteLifeEntry` |
 | Goals | the account's own goals: a new total, milestones, status, a note, and "Worked on this" (links the journal day) | `logGoalProgress`, `toggleGoalMilestone`, `setGoalStatus`, `addGoalNote`, `setGoalJournalDates` |
 | Habit | manual check-ins; connected habits are shown as the Habit Engine reads them | `toggleHabit` |
+| Plan | today's part of the active weekly plan: complete, "Worked on today" (links the day, stays open) or "Still pending" | `setPlanItemStatus`, `setObjectiveJournalLink`, `setItemJournalLink` |
 
 The address keeps the day and tab: `/journal?date=2026-11-18&section=goals`.
 `/journal?new=1` opens today's Day Update. Behind the form is the journal
@@ -23,7 +25,7 @@ unchanged.
 
 The form opens on the day: a week strip (logged days have a green dot, days
 with unsaved edits an amber one, and the calendar button jumps anywhere) and
-four one-line tabs, each with its figure. Day Update leads with its two most
+four one-line tabs plus Plan, each with its figure. Day Update leads with its two most
 important parts, **Study** and **Topics completed**, as large cards. Study
 shows the day's total against the daily target and the split by subject;
 rows work as in the entry dialog ("Add a subject" adds an empty row), with
@@ -53,7 +55,9 @@ untouched.
 
 `saveAll` in `components/capture/capture-workspace.tsx` applies only the tabs
 with changes, in this order: journal entry, life entry (it mirrors bedtime and
-wake-up onto the journal), goals, check-ins. Each section succeeds or fails on
+wake-up onto the journal), goals, check-ins. The Plan tab is deliberately not
+in this list: its actions are saved as they are taken, so a save never
+re-writes or holds back a completion. Each section succeeds or fails on
 its own; failed sections keep their edits and show why. It then waits for the
 cloud (`flush`) and the header says whether the changes are synced, still on
 their way, or kept on this device while offline.

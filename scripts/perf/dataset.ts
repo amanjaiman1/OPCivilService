@@ -21,6 +21,7 @@ import type {
   Mistake,
   MockTest,
   PlanItem,
+  PlanObjective,
   Reflection,
   Review,
   RevisionItem,
@@ -250,7 +251,13 @@ export function buildDataset(name: DatasetName, now: Date = new Date()): SampleC
       start,
       end,
       focus: prose(r, 10),
-      objectives: [prose(r, 6), prose(r, 6), prose(r, 6)],
+      objectives: Array.from({ length: 3 }, (_, k): PlanObjective => {
+        const title = prose(r, 6);
+        const done = m > 1;
+        const o: PlanObjective = { id: `${monthId}-o${k}`, title, status: done ? "completed" : "inProgress", createdAt: stamp(start) };
+        if (done) o.completedAt = stamp(end);
+        return o;
+      }),
       items: Array.from({ length: 4 }, (_, k): PlanItem => ({
         id: `${monthId}-m${k}`,
         kind: "milestone",

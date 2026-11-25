@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
+  Check,
   ChevronRight,
   Layers,
   Plus,
@@ -117,6 +118,8 @@ function TopicRow({
   onToggleSelect: () => void;
 }) {
   const setProgress = useChronicle((s) => s.setTopicProgress);
+  const completeTopic = useChronicle((s) => s.completeTopic);
+  const reopenTopic = useChronicle((s) => s.reopenTopic);
   const updateTopic = useChronicle((s) => s.updateTopic);
   const deleteTopic = useChronicle((s) => s.deleteTopic);
   const upsertRevision = useChronicle((s) => s.upsertRevision);
@@ -243,6 +246,32 @@ function TopicRow({
             </span>
           )}
         </div>
+
+        <button
+          type="button"
+          onClick={() =>
+            topic.status === "mastered"
+              ? reopenTopic(subject.id, topic.id)
+              : completeTopic(subject.id, topic.id)
+          }
+          aria-pressed={topic.status === "mastered"}
+          aria-label={topic.status === "mastered" ? `Reopen ${topic.name}` : `Mark ${topic.name} complete`}
+          title={
+            topic.status === "mastered"
+              ? topic.completedOn
+                ? `Completed ${formatDate(topic.completedOn)} — click to reopen`
+                : "Completed — click to reopen"
+              : "Mark complete"
+          }
+          className={cn(
+            "grid h-5 w-5 shrink-0 place-items-center rounded-full border transition-colors",
+            topic.status === "mastered"
+              ? "border-positive bg-positive text-ink"
+              : "border-paper/35 text-transparent hover:border-accent hover:text-accent/60",
+          )}
+        >
+          <Check className="h-3 w-3" />
+        </button>
 
         <StatusPicker
           value={topic.status}
@@ -405,14 +434,14 @@ function SubjectCard({
           className="flex min-w-0 flex-1 items-center gap-4 text-left"
           aria-expanded={open}
         >
-          <RadialProgress value={r.mastery} size={56} stroke={5} label={`${r.mastery}`} />
+          <RadialProgress value={r.completionPct} size={56} stroke={5} label={`${r.completionPct}%`} />
           <div className="min-w-0 flex-1">
             <h3 className="truncate text-base font-semibold text-paper">
               {subject.name}
             </h3>
             <p className="mt-0.5 truncate text-xs text-paper/40">
-              {r.topics} topic{r.topics === 1 ? "" : "s"} · {Math.round(r.hours)}h studied
-              {r.counts.mastered > 0 && ` · ${r.counts.mastered} mastered`}
+              {r.completed} of {r.topics} topic{r.topics === 1 ? "" : "s"} complete
+              {r.topics > 0 ? ` · ${r.completionPct}%` : ""} · mastery {r.mastery}% · {Math.round(r.hours)}h studied
             </p>
             <div className="mt-2 flex h-1.5 w-full overflow-hidden rounded-full bg-paper/[0.06]">
               {STATUS_ORDER.map((st) =>
@@ -729,7 +758,7 @@ export default function SubjectsPage() {
               /{stats.topics}
             </span>
           </p>
-          <p className="mt-1 text-xs text-paper/45">topics mastered</p>
+          <p className="mt-1 text-xs text-paper/45">topics completed</p>
           <Progress value={(stats.mastered / Math.max(1, stats.topics)) * 100} className="mt-2" />
         </Card>
         <Card className="flex flex-col justify-center p-5">

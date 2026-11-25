@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { Habit, JournalEntry, LifeEntry, PlanItem, RevisionItem, RoadmapPlan } from "@/lib/types";
+import type { Habit, JournalEntry, LifeEntry, PlanItem, RevisionItem, RoadmapPlan, Subject } from "@/lib/types";
 import {
   activityEvents,
   evaluateDay,
@@ -181,6 +181,36 @@ test("only finished Roadmap activities count, on the day they were completed", (
     events.map((e) => [e.id, e.date]),
     [["roadmap:p1:a1", "2026-11-17"]],
   );
+});
+
+test("a topic finished from the syllabus is activity on its completion day, and a journal record of it doesn't count twice", () => {
+  const subjects: Subject[] = [
+    {
+      id: "polity",
+      name: "Polity",
+      paper: "GS2",
+      topics: [
+        { id: "t1", name: "Federalism", status: "mastered", confidence: 92, revisionCount: 1, completedOn: "2026-11-17" },
+        { id: "t2", name: "Preamble", status: "mastered", confidence: 90, revisionCount: 2 },
+        { id: "t3", name: "Judiciary", status: "revised", confidence: 70, revisionCount: 1, lastTouched: "2026-11-18" },
+      ],
+    },
+  ];
+  const fromSyllabus = activityEvents(records({ subjects })).filter((e) => e.kind === "topic");
+  assert.deepEqual(
+    fromSyllabus.map((e) => [e.id, e.date, e.source]),
+    [["subject:polity:t1", "2026-11-17", "subject"]],
+    "dated by completion; a legacy mastered topic without the date claims no day",
+  );
+
+  const journal = [
+    day("2026-11-17", 2, {
+      completedTopics: [{ id: "c1", name: "Federalism", subjectId: "polity", topicId: "t1" }],
+    }),
+  ];
+  const both = activityEvents(records({ subjects, journal })).filter((e) => e.kind === "topic");
+  assert.equal(both.length, 1, "the same topic is one piece of activity");
+  assert.equal(both[0].id, "journal:2026-11-17:topic:c1", "the journal's own record is kept");
 });
 
 /* ── schedules, weeks and streaks ────────────────────────────── */

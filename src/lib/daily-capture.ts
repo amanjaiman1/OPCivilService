@@ -11,8 +11,8 @@ import { LIFE_INPUTS } from "./life-entry";
  * retry never applies anything twice.
  */
 
-export type CaptureSection = "day" | "life" | "goals" | "habit";
-export const CAPTURE_SECTIONS: CaptureSection[] = ["day", "life", "goals", "habit"];
+export type CaptureSection = "day" | "life" | "goals" | "habit" | "plan";
+export const CAPTURE_SECTIONS: CaptureSection[] = ["day", "life", "goals", "habit", "plan"];
 
 export function parseSection(v: string | null | undefined): CaptureSection {
   return CAPTURE_SECTIONS.includes(v as CaptureSection) ? (v as CaptureSection) : "day";

@@ -6,7 +6,13 @@ import { createBlankAccount, createAccountTemplate, type AccountSetup } from "./
 import { accountStorage, STORE_KEY, writeAppearance } from "./account/scope";
 import { normalizeProfile, normalizeSnapshot } from "./account/normalize";
 import { toISODate, fromISODate, uid } from "./utils";
-import { applyRevision, newRevisionItem, resolveTopicId } from "./revision";
+import { applyRevision, resolveTopicId } from "./revision";
+import {
+  completeTopicInData,
+  isTopicCompleted,
+  reopenTopicInData,
+  type CompleteTopicOptions,
+} from "./topic-completion";
 import {
   type ThemeMode,
   DEFAULT_THEME_MODE,
@@ -20,8 +26,10 @@ import { hoursFromTimes, isClock, MAX_SLEEP_HOURS } from "./sleep";
 import { pruneFiles } from "./files";
 import {
   type ChildPolicy,
+  LIMITS,
   canParent,
   carryForward as carryPlanItems,
+  blankObjective,
   overlapDays,
   duplicatePlan as duplicatePlanContent,
   moveItem,
@@ -36,9 +44,11 @@ import {
   tidyPlan,
   undoCarry,
   withJournalDate,
+  withObjectiveJournalDate,
+  withPlanObjectiveStatus,
   withStatus,
 } from "./roadmap";
-import { completedTopicsOf, normName } from "./topics";
+import { completedTopicsOf } from "./topics";
 import {
   type NotifySettings,
   type NotifyState,
@@ -75,6 +85,7 @@ import type {
   LifeEntry,
   PlanItem,
   PlanItemStatus,
+  PlanObjective,
   PlanReview,
   RoadmapPlan,
 } from "./types";
@@ -235,6 +246,23 @@ interface ChronicleState extends ChronicleData {
   /* subjects / topics */
   updateTopic: (subjectId: string, topicId: string, patch: Partial<Topic>) => void;
   reviseTopic: (topicId: string) => void;
+  /**
+   * The one way a topic is marked complete, whichever screen asks: status
+   * `mastered`, the completion day recorded, and (unless opted out) its first
+   * revision queued once. Idempotent — a second call changes nothing.
+   */
+  completeTopic: (
+    subjectId: string,
+    topicId: string,
+    completedAt?: ISODate,
+    options?: CompleteTopicOptions,
+  ) => { changed: boolean; revisionAdded: boolean };
+  /**
+   * Deliberately undo a completion. The topic goes back to `learning`; its
+   * revision history and completed sessions stay, and only a never-used queue
+   * entry created by the completion is removed.
+   */
+  reopenTopic: (subjectId: string, topicId: string) => boolean;
   setTopicStatusById: (topicId: string, status: TopicStatus) => void;
   /** Appends a topic and returns its new id, or null if the subject is unknown. */
   addTopic: (subjectId: string, name: string) => string | null;
@@ -372,6 +400,13 @@ interface ChronicleState extends ChronicleData {
   setPlanParent: (ids: string[], parentId: string | undefined) => number;
   /** Creates or updates one activity or milestone in a plan. */
   savePlanItem: (planId: string, item: PlanItem) => void;
+  /** Adds an objective to a plan and returns its new id, or null when full/blank. */
+  addPlanObjective: (planId: string, title: string) => string | null;
+  savePlanObjective: (planId: string, objective: PlanObjective) => void;
+  setPlanObjectiveStatus: (planId: string, objectiveId: string, status: PlanItemStatus) => void;
+  deletePlanObjective: (planId: string, objectiveId: string) => void;
+  /** Links or unlinks a journal day without completing the objective. */
+  setObjectiveJournalLink: (planId: string, objectiveId: string, date: ISODate, linked: boolean) => void;
   deletePlanItem: (planId: string, itemId: string) => void;
   setPlanItemStatus: (planId: string, itemId: string, status: PlanItemStatus) => void;
   movePlanItem: (planId: string, itemId: string, delta: -1 | 1) => void;
@@ -522,7 +557,7 @@ export interface SyncStamp {
  * has written the account, so an old cached app can't overwrite newer data.
  * Bump it whenever the shape of synced data changes.
  */
-export const STORE_VERSION = 17;
+export const STORE_VERSION = 18;
 
 let hydrationFailed = false;
 /** Whether the last rehydration from storage failed (unreadable or a migration threw). */
@@ -555,6 +590,26 @@ function maxStatus(a: TopicStatus, b: TopicStatus): TopicStatus {
 }
 
 /**
+ * One revision credited to a topic: +6 confidence, `revisionCount` bumped, and
+ * an upward-only status ratchet. If a revision is what lifts it to "mastered",
+ * the completion date is recorded at the same time, so a topic is never shown
+ * as complete without the date it became so.
+ */
+function credited(t: Topic, date: ISODate): Topic {
+  const confidence = Math.min(100, t.confidence + 6);
+  const status = maxStatus(t.status, statusFromConfidence(confidence));
+  const next: Topic = {
+    ...t,
+    revisionCount: t.revisionCount + 1,
+    lastTouched: date,
+    confidence,
+    status,
+  };
+  if (status === "mastered" && !next.completedOn) next.completedOn = date;
+  return next;
+}
+
+/**
  * Credits a set of syllabus topics with one revision each — the same +6
  * confidence, `revisionCount` bump and upward-only status ratchet that
  * `reviseTopic` applies to a single topic. Shared so that reviewing from the
@@ -563,22 +618,13 @@ function maxStatus(a: TopicStatus, b: TopicStatus): TopicStatus {
 function creditTopics(subjects: Subject[], topicIds: string[]): Subject[] {
   if (!topicIds.length) return subjects;
   const wanted = new Set(topicIds);
+  const today = toISODate(new Date());
   return subjects.map((sub) =>
     !sub.topics.some((t) => wanted.has(t.id))
       ? sub
       : {
           ...sub,
-          topics: sub.topics.map((t) => {
-            if (!wanted.has(t.id)) return t;
-            const confidence = Math.min(100, t.confidence + 6);
-            return {
-              ...t,
-              revisionCount: t.revisionCount + 1,
-              lastTouched: toISODate(new Date()),
-              confidence,
-              status: maxStatus(t.status, statusFromConfidence(confidence)),
-            };
-          }),
+          topics: sub.topics.map((t) => (wanted.has(t.id) ? credited(t, today) : t)),
         },
   );
 }
@@ -781,59 +827,27 @@ export const useChronicle = create<ChronicleState>()(
 
         let lifeLog = s.lifeLog;
 
-        /* ── syllabus: newly finished topics are at least "learning" ─ */
+        /* ── syllabus: finishing a topic completes it, once ──────── */
         const already = linkedTopicIds(before);
         const fresh = completedTopicsOf(saved).filter((c) => c.topicId && !already.has(c.topicId));
         let subjects = s.subjects;
-        if (fresh.length) {
-          const ids = new Set(fresh.map((c) => c.topicId!));
-          subjects = s.subjects.map((sub) =>
-            !sub.topics.some((t) => ids.has(t.id))
-              ? sub
-              : {
-                  ...sub,
-                  topics: sub.topics.map((t) => {
-                    if (!ids.has(t.id)) return t;
-                    const status = maxStatus(t.status, "learning");
-                    if (status !== t.status) result.topicsCredited++;
-                    return {
-                      ...t,
-                      status,
-                      confidence: Math.max(t.confidence, STATUS_CONF[status]),
-                      lastTouched:
-                        !t.lastTouched || t.lastTouched < saved.date ? saved.date : t.lastTouched,
-                    };
-                  }),
-                },
-          );
-        }
-
-        /* ── revision queue: schedule what was just finished ──── */
         let revisions = s.revisions;
-        if (scheduleRevision && fresh.length) {
-          const queued = new Set(s.revisions.map((r) => `${r.subjectId}::${normName(r.topic)}`));
-          const today = toISODate(new Date());
-          const added: RevisionItem[] = [];
+        if (fresh.length) {
+          let data = { subjects, revisions };
           for (const c of fresh) {
-            const found = subjects.find((sub) => sub.topics.some((t) => t.id === c.topicId));
+            const found = data.subjects.find((sub) => sub.topics.some((t) => t.id === c.topicId));
             const topic = found?.topics.find((t) => t.id === c.topicId);
             if (!found || !topic) continue;
-            const key = `${found.id}::${normName(topic.name)}`;
-            if (queued.has(key)) continue;
-            queued.add(key);
-            // First pass the day after it was finished, and never in the past.
-            const first = fromISODate(saved.date);
-            first.setDate(first.getDate() + 1);
-            const due = toISODate(first) < today ? today : toISODate(first);
-            added.push({
-              ...newRevisionItem(found.id, topic.name, fromISODate(saved.date)),
-              nextDue: due,
-            });
+            const out = completeTopicInData(data, found.id, topic.id, saved.date, { scheduleRevision });
+            if (out.changed) {
+              // Only a topic that was not already complete is newly credited.
+              if (!isTopicCompleted(topic)) result.topicsCredited++;
+              data = { subjects: out.subjects, revisions: out.revisions };
+            }
+            if (out.revisionAdded) result.revisionsScheduled++;
           }
-          if (added.length) {
-            result.revisionsScheduled = added.length;
-            revisions = [...s.revisions, ...added].sort((a, b) => a.nextDue.localeCompare(b.nextDue));
-          }
+          subjects = data.subjects;
+          revisions = data.revisions;
         }
 
         /* ── a replaced file's links move to its replacement ──── */
@@ -978,61 +992,124 @@ export const useChronicle = create<ChronicleState>()(
           ),
         })),
 
+      completeTopic: (subjectId, topicId, completedAt = toISODate(new Date()), options) => {
+        const s = get();
+        const out = completeTopicInData(
+          { subjects: s.subjects, revisions: s.revisions },
+          subjectId,
+          topicId,
+          completedAt,
+          options,
+        );
+        if (out.changed) {
+          set({
+            subjects: out.subjects,
+            ...(out.revisions !== s.revisions ? { revisions: out.revisions } : {}),
+          });
+        }
+        return { changed: out.changed, revisionAdded: out.revisionAdded };
+      },
+
+      reopenTopic: (subjectId, topicId) => {
+        const s = get();
+        const out = reopenTopicInData(
+          { subjects: s.subjects, revisions: s.revisions },
+          subjectId,
+          topicId,
+          toISODate(new Date()),
+        );
+        if (out.changed) {
+          set({
+            subjects: out.subjects,
+            ...(out.revisions !== s.revisions ? { revisions: out.revisions } : {}),
+          });
+        }
+        return out.changed;
+      },
+
       /**
        * Marks progress. Status and confidence are set together because they are
        * two readings of the same thing — the old flow snapped confidence to a
        * fixed number per status, so a topic you were 85% sure of dropped to 68
        * the moment you tagged it "revised".
+       *
+       * Choosing "mastered" is a completion and goes through the same reducer as
+       * every other entry point; stepping back down from "mastered" reopens it,
+       * so a completed topic never lingers with a stale completion day.
        */
-      setTopicProgress: (subjectId, topicId, status, confidence) =>
-        set((s) => ({
-          subjects: s.subjects.map((sub) =>
-            sub.id !== subjectId
-              ? sub
-              : {
-                  ...sub,
-                  topics: sub.topics.map((t) =>
-                    t.id !== topicId
-                      ? t
-                      : {
-                          ...t,
-                          status,
-                          confidence:
-                            confidence != null
-                              ? Math.max(0, Math.min(100, Math.round(confidence)))
-                              : Math.max(t.confidence, STATUS_CONF[status]),
-                          lastTouched: toISODate(new Date()),
-                        },
-                  ),
-                },
-          ),
-        })),
+      setTopicProgress: (subjectId, topicId, status, confidence) => {
+        const s = get();
+        const subject = s.subjects.find((x) => x.id === subjectId);
+        const existing = subject?.topics.find((t) => t.id === topicId);
+        if (!subject || !existing) return;
+        const date = toISODate(new Date());
+        let data = { subjects: s.subjects, revisions: s.revisions };
+        if (status === "mastered") data = completeTopicInData(data, subjectId, topicId, date);
+        else if (isTopicCompleted(existing)) data = reopenTopicInData(data, subjectId, topicId, date);
+        const subjects = data.subjects.map((sub) =>
+          sub.id !== subjectId
+            ? sub
+            : {
+                ...sub,
+                topics: sub.topics.map((t) => {
+                  if (t.id !== topicId) return t;
+                  const next: Topic = {
+                    ...t,
+                    status,
+                    confidence:
+                      confidence != null
+                        ? Math.max(0, Math.min(100, Math.round(confidence)))
+                        : Math.max(t.confidence, STATUS_CONF[status]),
+                    lastTouched: date,
+                  };
+                  if (status !== "mastered") delete next.completedOn;
+                  return next;
+                }),
+              },
+        );
+        set({
+          subjects,
+          ...(data.revisions !== s.revisions ? { revisions: data.revisions } : {}),
+        });
+      },
 
       setTopicsStatus: (subjectId, topicIds, status) => {
         const wanted = new Set(topicIds);
         if (!wanted.size) return;
-        set((s) => ({
-          subjects: s.subjects.map((sub) =>
-            sub.id !== subjectId
-              ? sub
-              : {
-                  ...sub,
-                  topics: sub.topics.map((t) =>
-                    !wanted.has(t.id)
-                      ? t
-                      : {
-                          ...t,
-                          status,
-                          // A bulk change is a coarse gesture, so it takes the
-                          // status's nominal confidence rather than inventing a
-                          // per-topic number.
-                          confidence: STATUS_CONF[status],
-                          lastTouched: toISODate(new Date()),
-                        },
-                  ),
-                },
-          ),
-        }));
+        const s = get();
+        const date = toISODate(new Date());
+        let data = { subjects: s.subjects, revisions: s.revisions };
+        for (const topicId of wanted) {
+          const topic = data.subjects.find((sub) => sub.id === subjectId)?.topics.find((t) => t.id === topicId);
+          if (!topic) continue;
+          if (status === "mastered") data = completeTopicInData(data, subjectId, topicId, date);
+          else if (isTopicCompleted(topic)) data = reopenTopicInData(data, subjectId, topicId, date);
+        }
+        const subjects = data.subjects.map((sub) =>
+          sub.id !== subjectId
+            ? sub
+            : {
+                ...sub,
+                topics: sub.topics.map((t) => {
+                  if (!wanted.has(t.id)) return t;
+                  const next: Topic = {
+                    ...t,
+                    status,
+                    // A bulk change is a coarse gesture, so it takes the
+                    // status's nominal confidence rather than inventing a
+                    // per-topic number.
+                    confidence: STATUS_CONF[status],
+                    lastTouched: date,
+                  };
+                  if (status !== "mastered") delete next.completedOn;
+                  return next;
+                }),
+              },
+        );
+        set({
+          subjects,
+          ...(data.revisions !== s.revisions ? { revisions: data.revisions } : {}),
+        });
       },
 
       upsertSubject: (subject) =>
@@ -1062,41 +1139,16 @@ export const useChronicle = create<ChronicleState>()(
               ? sub
               : {
                   ...sub,
-                  topics: sub.topics.map((t) => {
-                    if (t.id !== topicId) return t;
-                    const confidence = Math.min(100, t.confidence + 6);
-                    return {
-                      ...t,
-                      revisionCount: t.revisionCount + 1,
-                      lastTouched: toISODate(new Date()),
-                      confidence,
-                      status: maxStatus(t.status, statusFromConfidence(confidence)),
-                    };
-                  }),
+                  topics: sub.topics.map((t) => (t.id === topicId ? credited(t, toISODate(new Date())) : t)),
                 },
           ),
         })),
 
-      setTopicStatusById: (topicId, status) =>
-        set((s) => ({
-          subjects: s.subjects.map((sub) =>
-            !sub.topics.some((t) => t.id === topicId)
-              ? sub
-              : {
-                  ...sub,
-                  topics: sub.topics.map((t) =>
-                    t.id === topicId
-                      ? {
-                          ...t,
-                          status,
-                          confidence: Math.max(t.confidence, STATUS_CONF[status]),
-                          lastTouched: toISODate(new Date()),
-                        }
-                      : t,
-                  ),
-                },
-          ),
-        })),
+      setTopicStatusById: (topicId, status) => {
+        const subject = get().subjects.find((sub) => sub.topics.some((t) => t.id === topicId));
+        if (!subject) return;
+        get().setTopicProgress(subject.id, topicId, status);
+      },
 
       addTopicLink: (source, target, relation) =>
         set((s) => {
@@ -1725,6 +1777,74 @@ export const useChronicle = create<ChronicleState>()(
 
       deletePlanItem: (planId, itemId) => set((s) => ({ plans: removeItem(s.plans, planId, itemId) })),
 
+      addPlanObjective: (planId, title) => {
+        const text = title.trim();
+        if (!text) return null;
+        let id: string | null = null;
+        set((s) => ({
+          plans: s.plans.map((p) => {
+            if (p.id !== planId) return p;
+            const objectives = p.objectives ?? [];
+            if (objectives.length >= LIMITS.objectives) return p;
+            const objective = blankObjective(text.slice(0, LIMITS.itemTitle));
+            id = objective.id;
+            return { ...p, objectives: [...objectives, objective], updatedAt: new Date().toISOString() };
+          }),
+        }));
+        return id;
+      },
+
+      savePlanObjective: (planId, objective) =>
+        set((s) => ({
+          plans: s.plans.map((p) => {
+            if (p.id !== planId) return p;
+            const objectives = p.objectives ?? [];
+            const before = objectives.find((o) => o.id === objective.id);
+            const next: PlanObjective = { ...objective };
+            if (next.status === "completed") {
+              next.completedAt = before?.completedAt ?? next.completedAt ?? new Date().toISOString();
+            } else delete next.completedAt;
+            if (!before) {
+              if (objectives.length >= LIMITS.objectives) return p;
+              return { ...p, objectives: [...objectives, next], updatedAt: new Date().toISOString() };
+            }
+            return {
+              ...p,
+              updatedAt: new Date().toISOString(),
+              objectives: objectives.map((o) => (o.id === objective.id ? next : o)),
+            };
+          }),
+        })),
+
+      setPlanObjectiveStatus: (planId, objectiveId, status) =>
+        set((s) => ({
+          plans: s.plans.map((p) => (p.id === planId ? withPlanObjectiveStatus(p, objectiveId, status) : p)),
+        })),
+
+      deletePlanObjective: (planId, objectiveId) =>
+        set((s) => ({
+          plans: s.plans.map((p) => {
+            if (p.id !== planId || !p.objectives?.some((o) => o.id === objectiveId)) return p;
+            const objectives = p.objectives.filter((o) => o.id !== objectiveId);
+            const next: RoadmapPlan = { ...p, updatedAt: new Date().toISOString() };
+            if (objectives.length) next.objectives = objectives;
+            else delete next.objectives;
+            return next;
+          }),
+        })),
+
+      setObjectiveJournalLink: (planId, objectiveId, date, linked) =>
+        set((s) => ({
+          plans: s.plans.map((p) => {
+            if (p.id !== planId || !p.objectives?.some((o) => o.id === objectiveId)) return p;
+            return {
+              ...p,
+              updatedAt: new Date().toISOString(),
+              objectives: p.objectives.map((o) => (o.id === objectiveId ? withObjectiveJournalDate(o, date, linked) : o)),
+            };
+          }),
+        })),
+
       setPlanItemStatus: (planId, itemId, status) =>
         set((s) => ({
           plans: s.plans.map((p) => {
@@ -2060,6 +2180,25 @@ export const useChronicle = create<ChronicleState>()(
         // drafts and snapshots: all optional fields, so the records
         // themselves are untouched and read as they always did.
         if (version < 17 && !isCoachLog(state.coach)) state.coach = { decisions: [], briefings: [] };
+
+        // v17 -> v18: topics remember the day they were completed, and weekly
+        // objectives became records with an id and a completion state rather
+        // than plain strings. Old snapshots are normalised through the same
+        // idempotent reducers the app uses, so the text and order survive and
+        // two devices cannot invent different ids for the same objective.
+        if (version < 18) {
+          state.plans = normalizePlans(state.plans);
+          if (Array.isArray(state.subjects)) {
+            state.subjects = state.subjects.map((sub) => ({
+              ...sub,
+              topics: (sub.topics ?? []).map((t) =>
+                t.status === "mastered" && !t.completedOn && t.lastTouched
+                  ? { ...t, completedOn: t.lastTouched }
+                  : t,
+              ),
+            }));
+          }
+        }
 
         return state as ChronicleState;
       },

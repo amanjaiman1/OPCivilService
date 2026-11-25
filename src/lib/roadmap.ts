@@ -7,6 +7,7 @@ import type {
   PlanItemRef,
   PlanItemStatus,
   PlanLevel,
+  PlanObjective,
   PlanPriority,
   PlanReview,
   RoadmapPlan,
@@ -325,6 +326,63 @@ export function blankItem(kind: PlanItemKind, title: string, stamp: string = now
     status: "notStarted",
     createdAt: stamp,
   };
+}
+
+/** A fresh, empty objective. */
+export function blankObjective(title: string, stamp: string = now()): PlanObjective {
+  return {
+    id: uid("po"),
+    title: title.trim().slice(0, LIMITS.itemTitle),
+    status: "notStarted",
+    createdAt: stamp,
+  };
+}
+
+/**
+ * An objective with its completion time kept in step: completing stamps it,
+ * reopening clears the stamp. Everything else is left as it was.
+ */
+export function withObjectiveStatus(
+  objective: PlanObjective,
+  status: PlanItemStatus,
+  stamp: string = now(),
+): PlanObjective {
+  if (objective.status === status) return objective;
+  const next: PlanObjective = { ...objective, status };
+  if (status === "completed") next.completedAt = objective.completedAt ?? stamp;
+  else delete next.completedAt;
+  return next;
+}
+
+/**
+ * A status change on one objective of one plan, returning the plan untouched
+ * when nothing would change. Used by the store and by the daily execution
+ * view, so both write the same record shape.
+ */
+export function withPlanObjectiveStatus(
+  plan: RoadmapPlan,
+  objectiveId: string,
+  status: PlanItemStatus,
+  stamp: string = now(),
+): RoadmapPlan {
+  const objective = plan.objectives?.find((o) => o.id === objectiveId);
+  if (!objective || objective.status === status) return plan;
+  return {
+    ...plan,
+    updatedAt: stamp,
+    objectives: plan.objectives!.map((o) => (o.id === objectiveId ? withObjectiveStatus(o, status, stamp) : o)),
+  };
+}
+
+/** Links or unlinks a journal day on an objective. Nothing else changes. */
+export function withObjectiveJournalDate(objective: PlanObjective, date: ISODate, on: boolean): PlanObjective {
+  const set = new Set(objective.journalDates ?? []);
+  if (on) set.add(date);
+  else set.delete(date);
+  const next = { ...objective };
+  if (set.size) next.journalDates = [...set].sort();
+  else delete next.journalDates;
+  return next;
 }
 
 /**
@@ -765,7 +823,14 @@ export function duplicatePlan(
   const title = target.title ?? plan.title;
   if (title?.trim()) copy.title = title.trim();
   if (plan.focus) copy.focus = plan.focus;
-  if (plan.objectives?.length) copy.objectives = [...plan.objectives];
+  if (plan.objectives?.length) {
+    /* A copy starts again: new ids, nothing completed, text kept as written. */
+    copy.objectives = plan.objectives.map((o) => {
+      const c: PlanObjective = { id: uid("po"), title: o.title, status: "notStarted", createdAt: stamp };
+      if (o.description) c.description = o.description;
+      return c;
+    });
+  }
   if (plan.outcomes) copy.outcomes = plan.outcomes;
   if (plan.notes) copy.notes = plan.notes;
   if (plan.goalIds?.length) copy.goalIds = [...plan.goalIds];
@@ -877,8 +942,119 @@ export function rollupCounts(plans: RoadmapPlan[], plan: RoadmapPlan, today: ISO
   return { ...finish(out), plans: ids.size };
 }
 
-export type Timing = "upcoming" | "current" | "ended";
+/* ── objectives: the period's few things, each completable ───────── */
 
+export function objectivesOf(plan: Pick<RoadmapPlan, "objectives">): PlanObjective[] {
+  return plan.objectives ?? [];
+}
+
+export interface ObjectiveCounts {
+  total: number;
+  completed: number;
+  inProgress: number;
+  notStarted: number;
+  deferred: number;
+  /** Open and past its date (or the plan's end). */
+  overdue: number;
+  /** Share completed, 0–100. Null with none. */
+  pct: number | null;
+}
+
+/** Open, and its date (or its plan's last day) has gone by. */
+export function isObjectiveOverdue(
+  objective: PlanObjective,
+  plan: Pick<RoadmapPlan, "end">,
+  today: ISODate,
+): boolean {
+  if (objective.status === "completed" || objective.status === "deferred") return false;
+  return (objective.targetDate ?? plan.end) < today;
+}
+
+export function objectiveCounts(plan: Pick<RoadmapPlan, "objectives" | "end">, today: ISODate): ObjectiveCounts {
+  const out: ObjectiveCounts = {
+    total: 0,
+    completed: 0,
+    inProgress: 0,
+    notStarted: 0,
+    deferred: 0,
+    overdue: 0,
+    pct: null,
+  };
+  for (const o of plan.objectives ?? []) {
+    out.total++;
+    if (o.status === "completed") out.completed++;
+    else if (o.status === "inProgress") out.inProgress++;
+    else if (o.status === "deferred") out.deferred++;
+    else out.notStarted++;
+    if (isObjectiveOverdue(o, plan, today)) out.overdue++;
+  }
+  out.pct = out.total ? Math.round((out.completed / out.total) * 100) : null;
+  return out;
+}
+
+/* ── the review: what the plan's own records say happened ────────── */
+
+export interface ReviewEntry {
+  kind: PlanItemKind | "objective";
+  title: string;
+}
+
+export interface PlanReviewFacts {
+  objectives: ObjectiveCounts;
+  activities: ExecutionCounts;
+  milestones: { total: number; done: number };
+  /** Everything finished, objectives first. */
+  completed: ReviewEntry[];
+  /** Everything still open: objectives, activities, milestones. */
+  pending: ReviewEntry[];
+  /** Activities and objectives deliberately deferred. */
+  deferred: ReviewEntry[];
+  /** Activities that were copied on to another plan. */
+  carried: ReviewEntry[];
+}
+
+/**
+ * The factual side of a review, read from the plan itself: what was completed,
+ * what is still open, what was deferred and what was carried forward. The
+ * person writes only their reflection; these lists are never retyped.
+ */
+export function planReviewFacts(
+  plans: RoadmapPlan[],
+  plan: RoadmapPlan,
+  today: ISODate,
+): PlanReviewFacts {
+  const objectives = objectiveCounts(plan, today);
+  const activities = ownCounts(plans, plan, today);
+  const mile = milestonesOf(plan);
+  const completed: ReviewEntry[] = [];
+  const pending: ReviewEntry[] = [];
+  const deferred: ReviewEntry[] = [];
+  const carried: ReviewEntry[] = [];
+
+  for (const o of plan.objectives ?? []) {
+    if (o.status === "completed") completed.push({ kind: "objective", title: o.title });
+    else if (o.status === "deferred") deferred.push({ kind: "objective", title: o.title });
+    else pending.push({ kind: "objective", title: o.title });
+  }
+  for (const it of plan.items ?? []) {
+    if (it.status === "completed") completed.push({ kind: it.kind, title: it.title });
+    else if (it.status === "deferred") {
+      deferred.push({ kind: it.kind, title: it.title });
+      if (isCarried(plans, it)) carried.push({ kind: it.kind, title: it.title });
+    } else pending.push({ kind: it.kind, title: it.title });
+  }
+  return {
+    objectives,
+    activities,
+    milestones: { total: mile.length, done: mile.filter((m) => m.status === "completed").length },
+    completed,
+    pending,
+    deferred,
+    carried,
+  };
+}
+
+export type Timing = "upcoming" | "current" | "ended";
 /** Where today sits relative to a plan, and how much of it has gone. */
 export function timingOf(plan: Pick<RoadmapPlan, "start" | "end">, today: ISODate): { state: Timing; elapsedPct: number; daysLeft: number } {
   const total = daysBetween(plan.start, plan.end) + 1;
@@ -1066,7 +1242,7 @@ export function searchRoadmap(plans: RoadmapPlan[], query: string, f: RoadmapFil
           levelOk(p) &&
           touches(p.start, p.end) &&
           (f.goalId === "all" || (p.goalIds ?? []).includes(f.goalId)) &&
-          (!terms.length || matches(hay(p.title, planName(p), periodLabel(p), p.focus, p.objectives ?? [], p.outcomes, p.notes, reviewText(p.review)))),
+          (!terms.length || matches(hay(p.title, planName(p), periodLabel(p), p.focus, (p.objectives ?? []).map((o) => o.title), p.outcomes, p.notes, reviewText(p.review)))),
       );
 
   const itemHits: SearchResults["items"] = [];
@@ -1302,6 +1478,72 @@ function uniqueId(base: string, taken: Set<string>): string {
   return `${base}~${n}`;
 }
 
+/** A stable, deterministic id for an objective read from the old string list. */
+function legacyObjectiveId(planId: string, index: number, title: string): string {
+  const norm = title.trim().toLowerCase().replace(/\s+/g, " ");
+  let h = 0;
+  for (const ch of `${planId}|${index}|${norm}`) h = (h * 31 + ch.charCodeAt(0)) | 0;
+  return `po_${(h >>> 0).toString(36)}`;
+}
+
+/**
+ * Objectives in the shape this version stores, from anywhere: today's records,
+ * an older snapshot whose objectives were plain strings, another device, a
+ * backup. Old strings keep their text and order and get ids derived from the
+ * plan, position and text, so two devices produce the same ids instead of a
+ * duplicate objective each. Idempotent.
+ */
+export function normalizeObjectives(
+  raw: unknown,
+  planId: string,
+  fallbackStamp: string,
+): PlanObjective[] {
+  if (!Array.isArray(raw)) return [];
+  const taken = new Set<string>();
+  const out: PlanObjective[] = [];
+  raw.forEach((item, i) => {
+    let title: string | undefined;
+    let base: PlanObjective | null = null;
+    if (typeof item === "string") {
+      title = str(item);
+      if (!title) return;
+      base = {
+        id: legacyObjectiveId(planId, i, title),
+        title,
+        status: "notStarted",
+        createdAt: fallbackStamp,
+      };
+    } else if (item && typeof item === "object") {
+      const r = item as Record<string, unknown>;
+      title = str(r.title);
+      if (!title) return;
+      const id = typeof r.id === "string" && r.id ? r.id : legacyObjectiveId(planId, i, title);
+      base = {
+        id,
+        title,
+        status: typeof r.status === "string" && STATUS_SET.has(r.status) ? (r.status as PlanItemStatus) : "notStarted",
+        createdAt: typeof r.createdAt === "string" && r.createdAt ? r.createdAt : fallbackStamp,
+      };
+      const description = str(r.description);
+      if (description) base.description = description;
+      if (isISODate(r.targetDate)) base.targetDate = r.targetDate;
+      if (base.status === "completed") {
+        base.completedAt =
+          typeof r.completedAt === "string" && r.completedAt ? r.completedAt : base.createdAt;
+      }
+      if (Array.isArray(r.journalDates)) {
+        const dates = [...new Set(r.journalDates.filter(isISODate))].sort();
+        if (dates.length) base.journalDates = dates;
+      }
+    }
+    if (!base) return;
+    const id = taken.has(base.id) ? uniqueId(base.id, taken) : base.id;
+    taken.add(id);
+    out.push({ ...base, id });
+  });
+  return out;
+}
+
 function cleanItem(raw: unknown, fallbackStamp: string, taken: Set<string>): PlanItem | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
@@ -1389,8 +1631,8 @@ function cleanPlan(raw: unknown, takenPlans: Set<string>): RoadmapPlan | null {
     const v = str(r[k]);
     if (v) plan[k] = v;
   }
-  if (Array.isArray(r.objectives)) {
-    const list = r.objectives.map(str).filter((o): o is string => o !== undefined);
+  if (r.objectives !== undefined) {
+    const list = normalizeObjectives(r.objectives, id, fallbackStamp);
     if (list.length) plan.objectives = list;
   }
   if (Array.isArray(r.goalIds)) {

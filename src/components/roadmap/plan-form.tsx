@@ -10,6 +10,7 @@ import {
   MONTH_NAMES,
   WEEKDAY_NAMES,
   addDays,
+  blankObjective,
   blankPlan,
   carryable,
   formatSpan,
@@ -72,7 +73,7 @@ function FieldError({ children }: { children?: string }) {
 
 function draftFor(req: PlanFormRequest, plans: RoadmapPlan[], level: PlanLevel, today: ISODate, weekStart: number): RoadmapPlan {
   if (req.plan) {
-    return { ...req.plan, objectives: req.plan.objectives ? [...req.plan.objectives] : undefined, goalIds: req.plan.goalIds ? [...req.plan.goalIds] : undefined };
+    return { ...req.plan, objectives: req.plan.objectives ? req.plan.objectives.map((o) => ({ ...o })) : undefined, goalIds: req.plan.goalIds ? [...req.plan.goalIds] : undefined };
   }
   const plan = blankPlan(level, {
     year: req.year ?? Number(today.slice(0, 4)),
@@ -202,9 +203,12 @@ export function PlanForm({
   function save() {
     setTouched(true);
     if (!valid) return;
+    const keptObjectives = (draft.objectives ?? [])
+      .map((o) => ({ ...o, title: o.title.trim() }))
+      .filter((o) => o.title);
     const clean: RoadmapPlan = {
       ...draft,
-      objectives: (draft.objectives ?? []).map((o) => o.trim()).filter(Boolean),
+      objectives: keptObjectives.length ? keptObjectives : undefined,
       goalIds: [...new Set(draft.goalIds ?? [])].sort(),
     };
     if (!savePlan(clean)) {
@@ -505,18 +509,20 @@ export function PlanForm({
             {objectives.length > 0 && (
               <ul className="mb-2 space-y-2">
                 {objectives.map((o, i) => (
-                  <li key={i} className="flex items-center gap-2">
+                  <li key={o.id} className="flex items-center gap-2">
                     <Input
-                      value={o}
-                      onChange={(e) => patch({ objectives: objectives.map((x, j) => (j === i ? e.target.value : x)) })}
+                      value={o.title}
+                      onChange={(e) =>
+                        patch({ objectives: objectives.map((x) => (x.id === o.id ? { ...x, title: e.target.value } : x)) })
+                      }
                       placeholder={`Objective ${i + 1}`}
                       aria-label={`Objective ${i + 1}`}
-                      maxLength={200}
+                      maxLength={LIMITS.itemTitle}
                       className="flex-1"
                     />
                     <button
                       type="button"
-                      onClick={() => patch({ objectives: objectives.filter((_, j) => j !== i) })}
+                      onClick={() => patch({ objectives: objectives.filter((x) => x.id !== o.id) })}
                       aria-label={`Remove objective ${i + 1}`}
                       className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-paper/50 hover:bg-paper/[0.06] hover:text-paper"
                     >
@@ -529,7 +535,7 @@ export function PlanForm({
             {objectives.length < LIMITS.objectives && (
               <button
                 type="button"
-                onClick={() => patch({ objectives: [...objectives, ""] })}
+                onClick={() => patch({ objectives: [...objectives, blankObjective("")] })}
                 className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent hover:underline"
               >
                 <Plus className="h-3.5 w-3.5" /> Add an objective

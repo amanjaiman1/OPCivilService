@@ -5,23 +5,40 @@ import Link from "next/link";
 import { Check, ChevronRight, Forward } from "lucide-react";
 import type { ISODate, RoadmapPlan } from "@/lib/types";
 import { useChronicle } from "@/lib/store";
-import { activitiesOf, carryable, formatDay, isCarried, nextPlanOf, planName, timingOf } from "@/lib/roadmap";
+import {
+  carryable,
+  formatDay,
+  nextPlanOf,
+  planName,
+  planReviewFacts,
+  timingOf,
+  type ReviewEntry,
+} from "@/lib/roadmap";
 import { Button } from "@/components/ui/button";
 import { Field, Textarea } from "@/components/ui/form";
 import { cn, toISODate } from "@/lib/utils";
 import { Block, useRoadmapNav } from "./shared";
 
-function TitleList({ titles, empty }: { titles: string[]; empty: string }) {
-  if (!titles.length) return <p className="text-[0.75rem] text-paper/55">{empty}</p>;
-  const shown = titles.slice(0, 6);
+const KIND_LABEL: Record<ReviewEntry["kind"], string> = {
+  objective: "Objective",
+  activity: "Activity",
+  milestone: "Milestone",
+};
+
+function TitleList({ entries, empty }: { entries: ReviewEntry[]; empty: string }) {
+  if (!entries.length) return <p className="text-[0.75rem] text-paper/55">{empty}</p>;
+  const shown = entries.slice(0, 6);
   return (
     <ul className="space-y-1">
-      {shown.map((t, i) => (
-        <li key={i} className="line-clamp-2 text-[0.8rem] leading-snug text-paper/80" title={t}>
-          {t}
+      {shown.map((e, i) => (
+        <li key={`${e.kind}-${i}`} className="line-clamp-2 text-[0.8rem] leading-snug text-paper/80" title={e.title}>
+          <span className="mr-1.5 text-[0.62rem] font-semibold uppercase tracking-wide text-paper/40">
+            {KIND_LABEL[e.kind]}
+          </span>
+          {e.title}
         </li>
       ))}
-      {titles.length > shown.length && <li className="text-[0.72rem] text-paper/55">and {titles.length - shown.length} more</li>}
+      {entries.length > shown.length && <li className="text-[0.72rem] text-paper/55">and {entries.length - shown.length} more</li>}
     </ul>
   );
 }
@@ -57,10 +74,8 @@ export function PlanReviewBlock({
     setSaved(false);
   }, [plan.id, plan.review?.wentWell, plan.review?.improve, plan.review?.nextPriorities]);
 
-  const acts = activitiesOf(plan);
-  const done = acts.filter((i) => i.status === "completed").map((i) => i.title);
-  const open = carryable(plans, plan).map((i) => i.title);
-  const carried = acts.filter((i) => isCarried(plans, i)).map((i) => i.title);
+  const facts = useMemo(() => planReviewFacts(plans, plan, today), [plans, plan, today]);
+  const canCarry = plan.level !== "year" && carryable(plans, plan).length > 0;
   const timing = timingOf(plan, today);
   const next = nextPlanOf(plans, plan);
   const dirty =
@@ -84,27 +99,37 @@ export function PlanReviewBlock({
             : `This ${plan.level} hasn't started yet.`
       }
     >
-      <div className="grid gap-3 sm:grid-cols-3">
+      <p className="text-[0.78rem] text-paper/65">
+        Objectives <span className="font-semibold text-paper">{facts.objectives.completed}/{facts.objectives.total}</span>
+        {" · "}Activities <span className="font-semibold text-paper">{facts.activities.completed}/{facts.activities.total}</span>
+        {" · "}Milestones <span className="font-semibold text-paper">{facts.milestones.done}/{facts.milestones.total}</span>
+      </p>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-xl border border-line bg-paper/[0.02] p-3">
           <p className="mb-1.5 flex items-center gap-1.5 text-[0.72rem] font-semibold text-positive">
-            <Check className="h-3.5 w-3.5" /> Completed · {done.length}
+            <Check className="h-3.5 w-3.5" /> Completed · {facts.completed.length}
           </p>
-          <TitleList titles={done} empty="Nothing completed yet." />
+          <TitleList entries={facts.completed} empty="Nothing completed yet." />
         </div>
         <div className="rounded-xl border border-line bg-paper/[0.02] p-3">
-          <p className="mb-1.5 text-[0.72rem] font-semibold text-paper/80">Still open · {open.length}</p>
-          <TitleList titles={open} empty="Nothing left open." />
-          {open.length > 0 && plan.level !== "year" && (
+          <p className="mb-1.5 text-[0.72rem] font-semibold text-paper/80">Still pending · {facts.pending.length}</p>
+          <TitleList entries={facts.pending} empty="Nothing left open." />
+          {canCarry && (
             <Button variant="subtle" size="sm" className="-ml-2 mt-1.5" onClick={onCarry}>
               <Forward className="h-3.5 w-3.5" /> Carry forward
             </Button>
           )}
         </div>
         <div className="rounded-xl border border-line bg-paper/[0.02] p-3">
+          <p className="mb-1.5 text-[0.72rem] font-semibold text-paper/80">Deferred · {facts.deferred.length}</p>
+          <TitleList entries={facts.deferred} empty="Nothing deferred." />
+        </div>
+        <div className="rounded-xl border border-line bg-paper/[0.02] p-3">
           <p className="mb-1.5 flex items-center gap-1.5 text-[0.72rem] font-semibold text-paper/80">
-            <Forward className="h-3.5 w-3.5" /> Carried forward · {carried.length}
+            <Forward className="h-3.5 w-3.5" /> Carried forward · {facts.carried.length}
           </p>
-          <TitleList titles={carried} empty="Nothing carried forward." />
+          <TitleList entries={facts.carried} empty="Nothing carried forward." />
         </div>
       </div>
 

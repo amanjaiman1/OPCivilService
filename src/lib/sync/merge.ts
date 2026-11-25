@@ -56,6 +56,7 @@ const SET_PATHS = new Set([
   // are both kept, and so are journal days linked to an activity.
   "plans.goalIds",
   "plans.items.journalDates",
+  "plans.objectives.journalDates",
   // Revision days and diary files and tags from two devices are all kept.
   "revisions.passes",
   "reflections.fileIds",

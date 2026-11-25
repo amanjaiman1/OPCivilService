@@ -34,6 +34,7 @@ import {
   monthsBetween,
   nextPeriodStart,
   nextPlanOf,
+  objectiveCounts,
   ownCounts,
   periodLabel,
   planName,
@@ -52,6 +53,7 @@ import { Button } from "@/components/ui/button";
 import { cn, formatHours, toISODate } from "@/lib/utils";
 import { ItemForm, type ItemFormRequest } from "./item-form";
 import { CarryDialog, ItemList } from "./item-list";
+import { ObjectiveList } from "./objective-list";
 import { DeletePlanDialog, DuplicatePlanDialog } from "./plan-dialogs";
 import { PlanReviewBlock } from "./plan-review";
 import { MonthCalendar, WeekStrip } from "./calendar";
@@ -117,6 +119,7 @@ export function PlanView({
 
   const ancestors = useMemo(() => ancestorsOf(plans, plan).reverse(), [plans, plan]);
   const own = useMemo(() => ownCounts(plans, plan, today), [plans, plan, today]);
+  const objectives = useMemo(() => objectiveCounts(plan, today), [plan, today]);
   const roll = useMemo(() => rollupCounts(plans, plan, today), [plans, plan, today]);
   const timing = timingOf(plan, today);
   const prev = previousPlanOf(plans, plan);
@@ -305,17 +308,15 @@ export function PlanView({
                   )}
                   {plan.objectives?.length ? (
                     <div>
-                      <p className="eyebrow mb-1.5">Objectives</p>
-                      <ol className="space-y-1.5">
-                        {plan.objectives.map((o, i) => (
-                          <li key={i} className="flex gap-2.5 text-sm text-paper/85">
-                            <span className="tabular mt-px grid h-5 w-5 shrink-0 place-items-center rounded-full bg-accent/15 text-[0.65rem] font-bold text-accent">
-                              {i + 1}
-                            </span>
-                            <span className="min-w-0">{o}</span>
-                          </li>
-                        ))}
-                      </ol>
+                      <p className="eyebrow mb-1.5">
+                        Objectives
+                        {objectives.total > 0 && (
+                          <span className="ml-2 font-normal text-paper/50">
+                            {objectives.completed} of {objectives.total} done
+                          </span>
+                        )}
+                      </p>
+                      <ObjectiveList plan={plan} today={today} readOnly={archived} />
                     </div>
                   ) : null}
                   {plan.outcomes && (
@@ -326,9 +327,12 @@ export function PlanView({
                   )}
                 </div>
               ) : (
-                <p className="text-[0.8rem] text-paper/60">
-                  No focus or objectives yet. A line on what this {noun} is mainly about makes the rest easier to plan.
-                </p>
+                <div className="space-y-3">
+                  <p className="text-[0.8rem] text-paper/60">
+                    No focus or objectives yet. A line on what this {noun} is mainly about makes the rest easier to plan.
+                  </p>
+                  {!archived && <ObjectiveList plan={plan} today={today} />}
+                </div>
               )}
             </Block>
           </Card>
@@ -626,15 +630,29 @@ export function PlanView({
 
         <div className="min-w-0 space-y-4">
           <Card className="p-5">
-            <Block title="Progress" hint="Planned work only. Goals measure their own progress.">
+            <Block title="Progress" hint="Three separate counts: objectives, activities and milestones. Goals measure their own progress.">
+              {objectives.total > 0 && (
+                <div className="mb-3 space-y-1.5">
+                  <div className="flex items-baseline justify-between gap-2 text-[0.72rem]">
+                    <span className="font-semibold text-paper/70">Objectives</span>
+                    <span className="tabular text-paper/60">
+                      {objectives.completed} of {objectives.total}
+                      {objectives.pct != null ? ` · ${objectives.pct}%` : ""}
+                    </span>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-paper/10" aria-hidden>
+                    <div className="h-full rounded-full bg-accent" style={{ width: `${objectives.pct ?? 0}%` }} />
+                  </div>
+                </div>
+              )}
               <ExecutionBar
                 counts={hasChildren ? roll : own}
-                label={hasChildren ? (plan.level === "year" ? "Planned work done, with its months and weeks" : "Planned work done, with its weeks") : "Planned work done"}
+                label={hasChildren ? (plan.level === "year" ? "Activities done, with its months and weeks" : "Activities done, with its weeks") : "Activities done"}
               />
               <div className="grid grid-cols-2 gap-2">
-                <Stat label="Completed" value={(hasChildren ? roll : own).completed} tone="positive" />
-                <Stat label="In progress" value={(hasChildren ? roll : own).inProgress} />
-                <Stat label="Not started" value={(hasChildren ? roll : own).notStarted} />
+                <Stat label="Activities done" value={(hasChildren ? roll : own).completed} tone="positive" />
+                <Stat label="Activities in progress" value={(hasChildren ? roll : own).inProgress} />
+                <Stat label="Activities not started" value={(hasChildren ? roll : own).notStarted} />
                 <Stat label="Overdue" value={(hasChildren ? roll : own).overdue} tone={(hasChildren ? roll : own).overdue ? "danger" : undefined} />
               </div>
               {(hasChildren ? roll : own).deferred > 0 && (

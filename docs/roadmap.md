@@ -34,6 +34,14 @@ RoadmapPlan
 ├─ archivedAt   set when archived; the plan stays readable
 └─ createdAt, updatedAt
 
+PlanObjective
+├─ title, description
+├─ status       notStarted | inProgress | completed | deferred
+├─ targetDate   optional; without one the plan's last day is its deadline
+├─ journalDates[]  journal days deliberately linked ("worked on it today")
+├─ completedAt  set when completed, cleared when reopened
+└─ createdAt
+
 PlanItem
 ├─ kind         activity | milestone
 ├─ title, description, notes
@@ -82,6 +90,12 @@ Activities are **Not started**, **In progress**, **Completed** or
 **Deferred**. Only you change a status: no link, sync or review ever marks
 anything done.
 
+**Objectives** are the few things the period is for, each its own record with
+its own status and completion date. Ticking one completes it and stamps the
+date; reopening it deliberately clears the date. Adding an objective never
+completes it. "Worked on this today" links the objective to a journal day and
+leaves it open: being worked on is not the same as being finished.
+
 - **A plan's own progress** counts its own activities, including any carried
   forward to a later plan. They were planned for this period and not done in it.
 - **A plan with plans under it** also shows the total for everything inside
@@ -102,8 +116,9 @@ anything done.
   for those dates that stand alone can be brought in.
 - **Duplicate** copies a plan's own content to another period with new ids:
   title, focus, objectives, outcomes, notes, linked goals, and its activities
-  and milestones as not started, with dates moved along. Reviews, journal links
-  and the plans under it are not copied.
+  and milestones as not started, with dates moved along. Objectives and
+  activities are copied as fresh records, never as completed. Reviews, journal
+  links and the plans under it are not copied.
 - **Delete** asks what happens to the plans under it. **Keep them** moves them
   up a level (a month's weeks go to its year) or lets them stand alone.
   **Delete them too** removes them as well. Goals and journal days are never
@@ -123,8 +138,10 @@ anything done.
   for level, year, month, week, status (including overdue), priority, goal,
   subject and category.
 - **Review.** Each plan has its own weekly, monthly or yearly review: what was
-  completed, still open and carried forward (read from the activities), and
-  three questions to answer. It's stored on the plan.
+  completed, still open, deferred and carried forward (read from the plan's
+  objectives, activities and milestones), and three questions to answer. The
+  lists are never retyped; only the reflection is written. It's stored on the
+  plan.
 
 ## Links to the rest of the app
 

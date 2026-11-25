@@ -23,9 +23,11 @@ the day touches in one update:
   saving replaces it.
 - **Topics completed** are picked from the syllabus (`TopicPicker`). Free-text
   topics still work, and ones typed on earlier days are offered again. A newly
-  finished syllabus topic moves from untouched to learning (never backwards),
+  finished syllabus topic goes through the same completion as the Subjects
+  page: it is marked complete with the day it was done, never moved backwards,
   and a tick box (on by default) puts it on the revision queue, first due the
-  next day and never in the past.
+  next day and never in the past. Saving the same day again never queues it
+  twice.
 - **Revision** ticked off is rescheduled, as before.
 - **Goals this day served** links the day to goals; the goal shows the day and
   its files.
@@ -33,8 +35,16 @@ the day touches in one update:
   celebration. (The morning check-in used to create an empty placeholder entry
   first, so this never fired.)
 
-## Files
+## Your Weekly Plan Today
 
+Today's page also shows the active weekly plan's part for this day, without
+goals: what is scheduled today, what slipped from earlier, the week's open
+objectives and a short list of undated activities. Ticking a row completes the
+original Roadmap record; **Worked on today** links the day and leaves it open;
+**Still pending** changes nothing. The same reminder is the Plan tab of Daily
+Capture. Weeks that have ended never follow you into today.
+
+## Files
 Photos, PDFs, notes and documents can be attached to a day: up to 10 per day
 and 5 MB each, with phone photos resized first. They're stored once in private
 cloud storage, can be previewed, replaced and removed, and goals and Life

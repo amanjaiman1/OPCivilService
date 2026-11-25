@@ -467,7 +467,11 @@ export function buildSampleChronicle(now: Date = new Date()): SampleChronicle {
       start: monthStart(monthKey),
       end: monthEnd(monthKey),
       focus: "Close Polity and Economy, then the first full mocks",
-      objectives: ["Polity to 80% mastery", "Four Prelims GS mocks, each reviewed the same day", "Start Science & Tech basics"],
+      objectives: [
+        { id: "mo-sample-o1", title: "Polity to 80% mastery", status: "inProgress", createdAt: created },
+        { id: "mo-sample-o2", title: "Four Prelims GS mocks, each reviewed the same day", status: "completed", completedAt: stampAgo(2), createdAt: created },
+        { id: "mo-sample-o3", title: "Start Science & Tech basics", status: "notStarted", createdAt: created },
+      ],
       goalIds: ["g2", "g3"],
       items: [
         { id: "pm-polity", kind: "milestone", title: "Polity: every topic revised at least twice", targetDate: monthEnd(monthKey), status: "inProgress", subjectId: "polity", goalId: "g3", createdAt: created },

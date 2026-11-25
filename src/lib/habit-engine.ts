@@ -9,7 +9,7 @@ import type {
   Profile,
   TimeFormat,
 } from "./types";
-import { completedTopicsOf } from "./topics";
+import { completedTopicsOf, normName } from "./topics";
 import { clockMinutes, countedSleepHours, formatClock } from "./sleep";
 import { addDays, normalizeWeekStart, weekStartOf } from "./roadmap";
 import { daysBetween, fromISODate, toISODate } from "./utils";
@@ -48,7 +48,7 @@ import { daysBetween, fromISODate, toISODate } from "./utils";
 /* ── The shared activity layer ───────────────────────────────── */
 
 /** The module a record lives in. */
-export type ActivitySource = Exclude<HabitSource, "manual">;
+export type ActivitySource = Exclude<HabitSource, "manual"> | "subject";
 
 export type ActivityKind =
   /** Hours on one subject in a journal day. */
@@ -125,6 +125,10 @@ export function activityEvents(data: ActivityData): ActivityEvent[] {
   };
   const subjectName = new Map(data.subjects.map((s) => [s.id, s.name]));
   const nameOf = (id?: string) => (id && subjectName.get(id)) || "Unassigned";
+  // Topics a journal day already records, so the same completion isn't counted
+  // twice when it is also read from the syllabus.
+  const journalTopicIds = new Set<string>();
+  const journalTopicNames = new Set<string>();
 
   for (const entry of data.journal) {
     const href = `/journal/${entry.date}`;
@@ -151,6 +155,9 @@ export function activityEvents(data: ActivityData): ActivityEvent[] {
       });
     }
     for (const t of completedTopicsOf(entry)) {
+      if (t.topicId) journalTopicIds.add(t.topicId);
+      journalTopicNames.add(`${t.subjectId ?? ""}|${normName(t.name)}`);
+      journalTopicNames.add(`|${normName(t.name)}`);
       add({
         id: `journal:${entry.date}:topic:${t.id}`,
         source: "journal",
@@ -250,6 +257,30 @@ export function activityEvents(data: ActivityData): ActivityEvent[] {
         subjectId: item.subjectId,
         label: item.title,
         href: `/roadmap?plan=${plan.id}&item=${item.id}`,
+      });
+    }
+  }
+
+  // A topic finished from the syllabus (Subject Progress, the topic explorer)
+  // is activity too, not only one finished through a journal day. Its own date
+  // is the day it was completed; a completion the journal already records is
+  // left to the journal event so the same topic can't count twice.
+  for (const subject of data.subjects) {
+    for (const topic of subject.topics) {
+      if (topic.status !== "mastered" || !topic.completedOn) continue;
+      const name = normName(topic.name);
+      if (journalTopicIds.has(topic.id)) continue;
+      if (journalTopicNames.has(`${subject.id}|${name}`) || journalTopicNames.has(`|${name}`)) continue;
+      add({
+        id: `subject:${subject.id}:${topic.id}`,
+        source: "subject",
+        sourceId: topic.id,
+        kind: "topic",
+        date: topic.completedOn,
+        quantity: 1,
+        subjectId: subject.id,
+        label: `${subject.name}, ${topic.name}`,
+        href: `/subjects?subject=${encodeURIComponent(subject.id)}`,
       });
     }
   }
@@ -358,7 +389,7 @@ export const HABIT_METRICS: MetricDef[] = [
     min: 1,
     max: 20,
     subjectFilter: true,
-    explain: "Counts the topics you mark as finished in the Daily Journal.",
+    explain: "Counts the topics you mark as finished, in the Daily Journal or on the Subjects page.",
     example: "Enter 2 to finish two topics a day.",
     noun: "topics finished",
   },

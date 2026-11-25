@@ -100,6 +100,12 @@ export interface Topic {
   confidence: number; // 0-100
   revisionCount: number;
   lastTouched?: ISODate;
+  /**
+   * The day it was marked completed — "mastered", the top rung of the status
+   * ladder. Absent on topics saved before completion was recorded, and cleared
+   * when a topic is reopened. See `completeTopic` / `reopenTopic` in the store.
+   */
+  completedOn?: ISODate;
 }
 
 export interface Subject {
@@ -1055,6 +1061,31 @@ export interface PlanReview {
 }
 
 /**
+ * One objective of a plan, with its own completion state.
+ *
+ * Objectives used to be plain strings, so a weekly objective could be written
+ * but never ticked off — the same line had to be retyped in the weekly update.
+ * They are records now. Snapshots saved in the old shape are normalised into
+ * this one on load (`normalizeObjectives`), with ids derived deterministically
+ * from the plan, position and text so two devices arrive at the same ids for
+ * the same old data instead of creating duplicates.
+ */
+export interface PlanObjective {
+  id: string;
+  title: string;
+  description?: string;
+  /** Same vocabulary as a plan item: notStarted | inProgress | completed | deferred. */
+  status: PlanItemStatus;
+  /** ISO timestamp. */
+  createdAt: string;
+  /** When it was marked completed (ISO timestamp). Cleared if reopened. */
+  completedAt?: string;
+  targetDate?: ISODate;
+  /** Journal days deliberately linked to this objective. */
+  journalDates?: ISODate[];
+}
+
+/**
  * One plan. Dates are calendar dates and are the source of truth: a month
  * runs from its first to its last day, a week for seven days from `start`,
  * and a year from 1 January to 31 December unless other dates were chosen.
@@ -1071,7 +1102,11 @@ export interface RoadmapPlan {
   /** The plan this one sits under. Never deleted or changed for you. */
   parentId?: string;
   focus?: string;
-  objectives?: string[];
+  /**
+   * The few things this period is for. Completable records (see
+   * `PlanObjective`); old snapshots hold plain strings and are normalised.
+   */
+  objectives?: PlanObjective[];
   outcomes?: string;
   notes?: string;
   /** Goals this plan works towards, by id. References only. */

@@ -198,6 +198,10 @@ export interface SubjectRollup {
   mastery: number;
   counts: StatusCounts;
   topics: number;
+  /** Topics at the top of the ladder — a completed topic. */
+  completed: number;
+  /** Completed topics as a share of all topics, 0–100. */
+  completionPct: number;
   hours: number;
   /** Topics not touched for a while. */
   stale: number;
@@ -232,6 +236,10 @@ export function rollupSubject(
     mastery: mastery(subject.topics),
     counts: statusCounts(subject.topics),
     topics: subject.topics.length,
+    completed: subject.topics.filter((t) => t.status === "mastered").length,
+    completionPct: subject.topics.length
+      ? Math.round((subject.topics.filter((t) => t.status === "mastered").length / subject.topics.length) * 100)
+      : 0,
     hours: round(hours, 1),
     stale: subject.topics.filter((t) => isStale(t, today)).length,
     withOpenMistakes,
