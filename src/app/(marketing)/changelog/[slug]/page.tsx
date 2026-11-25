@@ -20,8 +20,8 @@ export function generateStaticParams(): { slug: string }[] {
 
 const pathOf = (slug: string) => `${PAGES.changelog.path}/${slug}`;
 
-export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
-  const entry = await getChangelogEntry(params.slug);
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const entry = await getChangelogEntry((await params).slug);
   if (!entry) return { title: "Update not found", robots: { index: false, follow: true } };
   return pageMetadata(
     { path: pathOf(entry.slug), title: entry.seoTitle || entry.title, description: entry.seoDescription || entry.summary },
@@ -29,8 +29,8 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   );
 }
 
-export default async function ChangelogEntryPage({ params }: { params: { slug: string } }) {
-  const entry = await getChangelogEntry(params.slug);
+export default async function ChangelogEntryPage({ params }: { params: Promise<{ slug: string }> }) {
+  const entry = await getChangelogEntry((await params).slug);
   if (!entry) notFound();
   return (
     <>

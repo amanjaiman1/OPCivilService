@@ -27,10 +27,10 @@ select count(*) as accounts,
        pg_size_pretty(coalesce(avg(octet_length(data::text)), 0)::bigint) as average_snapshot
   from public.chronicle_state;
 
--- 4. The largest snapshots (no names or emails — just sizes and save counts).
+-- 4. The largest snapshots (no names or emails — just sizes and snapshot versions).
 select left(user_id::text, 8) || '…' as account,
        pg_size_pretty(octet_length(data::text)::bigint) as snapshot_size,
-       version as saves,
+       version as snapshot_version,
        updated_at as last_saved
   from public.chronicle_state
  order by octet_length(data::text) desc

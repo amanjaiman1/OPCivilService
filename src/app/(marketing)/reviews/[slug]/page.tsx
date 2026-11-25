@@ -24,8 +24,8 @@ export function generateStaticParams(): { slug: string }[] {
 const title = (headline: string | null, date: string) => headline ?? `A DoOrDie review from ${reviewDate(date)}`;
 const excerpt = (text: string) => (text.length > 155 ? `${text.slice(0, 152).replace(/\s+\S*$/, "")}…` : text);
 
-export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
-  const r = await getPublicReview(params.slug);
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const r = await getPublicReview((await params).slug);
   if (!r || !r.story) return { title: "Review not found", robots: { index: false, follow: true } };
   return pageMetadata(
     { path: reviewPath(r.slug), title: `${title(r.headline, r.publishedAt)}: a DoOrDie review`, description: excerpt(r.problemBefore ?? r.body ?? "") },
@@ -33,8 +33,8 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   );
 }
 
-export default async function ReviewPage({ params }: { params: { slug: string } }) {
-  const r = await getPublicReview(params.slug);
+export default async function ReviewPage({ params }: { params: Promise<{ slug: string }> }) {
+  const r = await getPublicReview((await params).slug);
   if (!r || !r.story) notFound();
   const context = reviewContext(r);
   const answers = [

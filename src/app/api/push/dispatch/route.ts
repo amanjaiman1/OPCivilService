@@ -86,6 +86,8 @@ async function dispatch(request: Request) {
     );
   }
 
+  // Bounded and idempotent per UTC day, independent of the presence of subscribers.
+  await admin.rpc("platform_sample_footprint");
   const { data: rows, error: rowsError } = await admin
     .from("chronicle_push_subscriptions")
     .select("id, user_id, endpoint, key_p256dh, key_auth, platform, timezone");
@@ -97,7 +99,14 @@ async function dispatch(request: Request) {
   if (byUser.size === 0) {
     return NextResponse.json({ ok: true, users: 0, sent: 0, skipped: [] });
   }
-  const userIds = [...byUser.keys()];
+  const allowed = await admin.rpc("platform_push_eligible_users", { p_users: [...byUser.keys()] });
+  if (allowed.error || !Array.isArray(allowed.data)) {
+    return NextResponse.json({ ok: false, error: "Account eligibility unavailable." }, { status: 503 });
+  }
+  const userIds = allowed.data as string[];
+  const eligible = new Set(userIds);
+  for (const userId of byUser.keys()) if (!eligible.has(userId)) byUser.delete(userId);
+  if (!userIds.length) return NextResponse.json({ ok: true, users: 0, sent: 0, skipped: [] });
 
   /**
    * Both lookups are batched. One query per user would turn a few hundred
@@ -107,17 +116,16 @@ async function dispatch(request: Request) {
   /**
    * The snapshots come trimmed — no journal prose, no photos, no long notes —
    * from `chronicle_dispatch_snapshots`, which is most of the egress this route
-   * used to cost. Before that migration is applied, fall back to whole rows.
+   * used to cost. An unavailable privacy projection pauses dispatch.
    */
   const [trimmed, { data: logs }] = await Promise.all([
     admin.rpc("chronicle_dispatch_snapshots", { p_user_ids: userIds }),
     admin.from("chronicle_push_log").select("user_id, log").in("user_id", userIds),
   ]);
-  let states = trimmed.data as { user_id: string; data: unknown }[] | null;
   if (trimmed.error) {
-    const full = await admin.from("chronicle_state").select("user_id, data").in("user_id", userIds);
-    states = full.data;
+    return NextResponse.json({ ok: false, error: "Notification data unavailable." }, { status: 503 });
   }
+  const states = trimmed.data as { user_id: string; data: unknown }[] | null;
 
   const snapshots = new Map<string, Snapshot>();
   for (const row of states ?? []) {

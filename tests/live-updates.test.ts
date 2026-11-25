@@ -48,7 +48,8 @@ test("each Admin Center page follows what it shows", () => {
   assert.deepEqual(adminAreasFor("me"), [], "the role check is the Admin Center's own");
   // Every page the Admin API serves with a GET is covered.
   const gets = [...new Set(ADMIN_ROUTES.filter((r) => r.method === "GET").map((r) => r.path.split("/")[0]))];
-  for (const page of gets.filter((p) => p !== "me")) assert.ok(adminAreasFor(page).length > 0, `${page} reloads on nothing`);
+  assert.deepEqual(adminAreasFor("resource-usage"), [], "usage refresh is explicit to avoid re-aggregation on every sync");
+  for (const page of gets.filter((p) => p !== "me" && p !== "resource-usage")) assert.ok(adminAreasFor(page).length > 0, `${page} reloads on nothing`);
 });
 
 test("sending can't break a change, and nobody but the database can send", () => {

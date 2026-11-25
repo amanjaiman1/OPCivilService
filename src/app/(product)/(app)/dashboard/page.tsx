@@ -1,6 +1,11 @@
 "use client";
 
 import { useChronicle, useHasHydrated } from "@/lib/store";
+import { Plus } from "lucide-react";
+import { CaptureSectionButton } from "@/components/capture/capture-trigger";
+import { useNotifications } from "@/components/notifications/use-notifications";
+import { useAccount } from "@/components/account/account-session";
+import { Card } from "@/components/ui/card";
 import { activePlans } from "@/lib/roadmap";
 import { Loading } from "@/components/ui/loading";
 import { cn } from "@/lib/utils";
@@ -18,7 +23,25 @@ import {
 } from "@/components/dashboard/widgets";
 import { RoadmapWeekCard } from "@/components/roadmap/dashboard-card";
 import { HabitsPanel } from "@/components/habits/habits-panel";
-import { ReviewInvitation } from "@/components/platform/review-invitation";
+
+function FirstStudyEntry() {
+  const { mode } = useAccount();
+  const { inbox, ready, evaluated } = useNotifications();
+  const note = inbox.items.find((item) => item.ruleId === "first-study-entry");
+  if (mode !== "cloud" || !ready || !evaluated || !note) return null;
+
+  return (
+    <Card className="flex flex-wrap items-center justify-between gap-3 border-accent/25 bg-accent/[0.06] p-4 md:order-2 md:col-span-12">
+      <div>
+        <h2 className="text-sm font-semibold text-paper">{note.title}</h2>
+        <p className="mt-1 text-xs text-paper/70">{note.body}</p>
+      </div>
+      <CaptureSectionButton target={{}} className="bg-accent px-4 text-sm font-semibold text-accent-fg">
+        <Plus className="h-4 w-4" aria-hidden /> {note.cta}
+      </CaptureSectionButton>
+    </Card>
+  );
+}
 
 /**
  * Home. One twelve-column grid whose proportions follow what
@@ -41,8 +64,7 @@ export default function HomePage() {
     <div className="grid grid-cols-1 gap-4 md:grid-cols-12 wide:gap-5">
       <WelcomePanel className="h-full md:order-1 md:col-span-12 wide:col-span-5" />
       <MetricGrid className="md:order-2 md:col-span-12 wide:col-span-7" />
-      {/* Only for accounts the database says may be asked; renders nothing otherwise. */}
-      <ReviewInvitation className="md:order-2 md:col-span-12" />
+      <FirstStudyEntry />
       <TodayPanel className="h-full md:order-4 md:col-span-6 wide:col-span-4" />
       <RevisionPanel className="h-full md:order-5 md:col-span-6 wide:order-7 wide:col-span-4" />
       <ActivityPanel className="h-full md:order-3 md:col-span-12 wide:col-span-8" />

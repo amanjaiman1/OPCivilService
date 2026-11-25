@@ -1,9 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    // Screenshots on the public site are served as AVIF where the browser
-    // supports it, WebP otherwise.
-    formats: ["image/avif", "image/webp"],
+    // Use the patched image stack and keep WebP as the only generated format.
+    formats: ["image/webp"],
   },
   experimental: {
     // How long a tab reuses a page it already has from the server before

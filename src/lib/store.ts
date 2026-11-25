@@ -531,7 +531,7 @@ export interface SyncStamp {
  * has written the account, so an old cached app can't overwrite newer data.
  * Bump it whenever the shape of synced data changes.
  */
-export const STORE_VERSION = 18;
+export const STORE_VERSION = 19;
 
 let hydrationFailed = false;
 /** Whether the last rehydration from storage failed (unreadable or a migration threw). */
@@ -2095,6 +2095,7 @@ export const useChronicle = create<ChronicleState>()(
         // v17 -> v18: weekly objectives become actionable Roadmap items.
         if (version < 18 && state.plans !== undefined) state.plans = normalizePlans(state.plans);
 
+        // v19 adds a write compatibility floor for Phase 03 sleep fields. Existing data is kept.
         return state as ChronicleState;
       },
       partialize: (s) => {

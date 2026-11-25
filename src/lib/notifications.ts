@@ -35,6 +35,7 @@ export type RuleId =
   | "revision-overdue"
   | "revision-due-today"
   | "mistakes-due"
+  | "first-study-entry"
   | "journal-unlogged"
   | "journal-streak-risk"
   | "habits-pending"
@@ -129,6 +130,12 @@ export const RULES: RuleMeta[] = [
     category: "revision",
     label: "Mistakes to review",
     description: "Logged mistakes due for a recall check.",
+  },
+  {
+    id: "first-study-entry",
+    category: "journal",
+    label: "First study entry",
+    description: "A one-time reminder during the first week after setup.",
   },
   {
     id: "journal-unlogged",
@@ -388,7 +395,23 @@ export function evaluate(
   const streak = currentStreak(data.journal ?? [], now);
   const streakAtRisk = hoursToday <= 0 && streak >= 3 && hour >= 20;
 
-  if (streakAtRisk) {
+  const setupDay = data.profile?.onboardedAt;
+  const daysSinceSetup = setupDay ? daysBetween(setupDay, today) : -1;
+  const hasStudy = (data.journal ?? []).some((entry) => entry.totalHours > 0) ||
+    (data.mocks ?? []).length > 0 || (data.revisions ?? []).some((entry) => Boolean(entry.passes?.length));
+  if (!hasStudy && daysSinceSetup >= 0 && daysSinceSetup < 7 && hour >= cfg.reminderHour) {
+    push({
+      id: `first-study-entry:${setupDay}`,
+      ruleId: "first-study-entry",
+      category: "journal",
+      priority: "normal",
+      title: "Start your preparation record",
+      body: "Log your first study session to see how your preparation adds up.",
+      href: "/journal?new=1",
+      cta: "Log first study session",
+      dedupeKey: "first-study-entry",
+    });
+  } else if (streakAtRisk) {
     push({
       id: `journal-streak-risk:${today}`,
       ruleId: "journal-streak-risk",
@@ -401,7 +424,7 @@ export function evaluate(
       count: streak,
       dedupeKey: "journal-streak-risk",
     });
-  } else if (hoursToday <= 0 && hour >= cfg.reminderHour) {
+  } else if ((hasStudy || !setupDay) && hoursToday <= 0 && hour >= cfg.reminderHour) {
     /** Exclusive with the streak warning — both would say "log today". */
     push({
       id: `journal-unlogged:${today}`,
@@ -943,7 +966,11 @@ export function planDelivery(
 
   if (!cfg.enabled) return { kind: "none", reason: "Notifications are off." };
   if (!cfg.deliver) return { kind: "none", reason: "Delivery is off." };
-  if (inbox.deliverable.length === 0)
+  const candidates = inbox.deliverable.filter((notice) =>
+    notice.ruleId !== "first-study-entry" || (!l.lastSentOn?.[notice.dedupeKey] &&
+      !inQuietHours(hour, cfg.quietFrom, cfg.quietTo) && (l.sentOnDate !== today || l.sentToday < cfg.maxPerDay)),
+  );
+  if (candidates.length === 0)
     return { kind: "none", reason: "Nothing to deliver." };
 
   if (cfg.digest) {
@@ -951,16 +978,16 @@ export function planDelivery(
       return { kind: "none", reason: "Today's digest already went out." };
     if (hour < cfg.digestHour)
       return { kind: "none", reason: "Before the digest hour." };
-    const n = inbox.deliverable.length;
-    const top = inbox.deliverable[0];
+    const n = candidates.length;
+    const top = candidates[0];
     return {
       kind: "digest",
-      notices: inbox.deliverable,
+      notices: candidates,
       title: n === 1 ? top.title : `${plural(n, "thing")} need you today`,
       body:
         n === 1
           ? top.body
-          : inbox.deliverable
+          : candidates
               .slice(0, 3)
               .map((i) => i.title)
               .join(" · "),
@@ -980,7 +1007,7 @@ export function planDelivery(
     instant.getTime() - lastAny >= cfg.minGapMinutes * 60_000;
 
   const picked: NoticeView[] = [];
-  for (const n of inbox.deliverable) {
+  for (const n of candidates) {
     const critical = n.priority === "critical";
     if (!critical && sentToday + picked.length >= cfg.maxPerDay) continue;
     if (!critical && !gapOk) continue;

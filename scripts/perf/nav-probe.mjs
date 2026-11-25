@@ -249,7 +249,7 @@ async function main() {
     console.log("Building the app against it…");
     execFileSync("npx", ["next", "build"], { cwd: root, env, stdio: "ignore" });
   }
-  await start(process.execPath, ["node_modules/next/dist/bin/next", "start", "-p", "3100"], "Ready");
+  await start(process.execPath, ["node_modules/next/dist/bin/next", "start", "-H", "127.0.0.1", "-p", "3100"], "Ready");
   const browser = await chromium.launch();
   const results = {
     label: LABEL,

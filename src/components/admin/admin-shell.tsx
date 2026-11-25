@@ -12,6 +12,7 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { ADMIN_NAV, activeAdminItem } from "@/lib/platform/nav";
 import { ROLE_LABEL, opensAdminCenter } from "@/lib/platform/roles";
 import { cn } from "@/lib/utils";
+import { AttentionProvider, useAttention, type Section } from "./attention";
 import { useAdminActor } from "./admin-context";
 import { RefreshDataControl } from "./refresh-data";
 
@@ -19,6 +20,7 @@ function AdminNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname() ?? "/admin";
   const { can } = useAdminActor();
   const active = activeAdminItem(pathname);
+  const attention = useAttention();
   return (
     <nav aria-label="Admin Center" className="flex-1 space-y-5 overflow-y-auto px-3 pb-4 no-scrollbar">
       {ADMIN_NAV.map((group) => {
@@ -31,12 +33,16 @@ function AdminNav({ onNavigate }: { onNavigate?: () => void }) {
               {items.map((item) => {
                 const on = active?.href === item.href;
                 const Icon = item.icon;
+                const summary = attention[item.href.split("/").at(-1) as Section];
+                const total = summary ? summary.pending + (summary.crashes ?? 0) : 0;
                 return (
                   <li key={item.href}>
                     <Link
                       href={item.href}
                       onClick={onNavigate}
                       aria-current={on ? "page" : undefined}
+                      aria-label={item.label}
+                      aria-description={[summary?.unseen ? "Unseen updates" : "", total ? `${total} need action` : ""].filter(Boolean).join(". ") || undefined}
                       className={cn(
                         "group relative flex items-center gap-3 rounded-xl px-3 py-[0.55rem] text-[0.84rem] transition-all duration-200",
                         on
@@ -46,6 +52,8 @@ function AdminNav({ onNavigate }: { onNavigate?: () => void }) {
                     >
                       <Icon className={cn("h-4 w-4 shrink-0", on ? "text-accent" : "text-paper/55")} strokeWidth={on ? 2.1 : 1.85} />
                       {item.label}
+                      {summary?.unseen && <span className="h-2 w-2 shrink-0 rounded-full bg-accent" title="Unseen updates"><span className="sr-only">Unseen updates</span></span>}
+                      {total > 0 && <span className="ml-auto rounded-full bg-warning/15 px-2 py-0.5 text-xs text-warning" title={`${total} need action`}><span aria-hidden>{total}</span><span className="sr-only">{total} need action</span></span>}
                     </Link>
                   </li>
                 );
@@ -130,6 +138,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   }, [drawer]);
 
   return (
+    <AttentionProvider key={`${actor.userId}:${actor.permissions.join(",")}`}>
     <div className="app-root relative flex h-[100dvh] overflow-hidden" data-admin-center>
       <div aria-hidden className="app-backdrop pointer-events-none fixed inset-0 -z-10" />
 
@@ -231,5 +240,6 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </main>
       </div>
     </div>
+    </AttentionProvider>
   );
 }

@@ -15,7 +15,7 @@ import { SETTINGS, settingProblem, type SettingDef, type SettingKey } from "@/li
 import type { SettingsResponse } from "@/lib/platform/types";
 
 const GROUPS: { title: string; description: string; keys: SettingKey[] }[] = [
-  { title: "Reviews", description: "Who may send a review. Usage is counted from the dates of an account's records, never from what they wrote.", keys: ["reviews_open", "review_min_days", "review_min_usage_days", "review_invite_enabled"] },
+  { title: "Reviews", description: "Who may send a review. Usage is counted from the dates of an account's records, never from what they wrote.", keys: ["reviews_open", "review_min_days", "review_min_usage_days", "review_invite_enabled", "review_invite_time", "review_invite_frequency_days", "review_invite_postpone_days"] },
   { title: "Publishing reviews", description: "What the website shows while an edit waits, and when a review earns its own page.", keys: ["review_edit_policy", "review_story_min_chars"] },
   { title: "Reviews on the website", description: "Where published reviews appear, and when an average may be shown. Featured ones first, then the newest; never chosen by rating.", keys: ["testimonials_on_home", "testimonials_home_count", "testimonials_on_feature_pages", "review_aggregate_min"] },
   { title: "Verification badges", description: "What the two earned badges need. The other two follow from the review rule and the records themselves.", keys: ["verified_active_usage_days", "established_member_days"] },
@@ -85,6 +85,8 @@ function describe(def: SettingDef, v: unknown): string {
       return v ? "On" : "Off";
     case "integer":
       return `${v} ${def.unit}`;
+    case "time":
+      return String(v ?? "");
     case "email":
       return v ? String(v) : "None";
     case "choice":
@@ -225,7 +227,11 @@ function SettingRow({
 
   return (
     <div className={row}>
-      {def.kind === "integer" ? (
+      {def.kind === "time" ? (
+        <Field label={def.label} hint={def.help} error={problem}>
+          <Input type="time" value={typeof value === "string" ? value : ""} onChange={(event) => onChange(event.target.value)} className="max-w-[10rem]" />
+        </Field>
+      ) : def.kind === "integer" ? (
         <Field label={`${def.label} (${def.unit})`} hint={def.help} error={problem}>
           <Input
             type="number"

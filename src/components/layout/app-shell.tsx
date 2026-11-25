@@ -16,6 +16,7 @@ import { NotificationsProvider } from "@/components/notifications/use-notificati
 import { TourProvider } from "@/components/tour/tour-provider";
 import { useAccount } from "@/components/account/account-session";
 import { FeatureAccessScope, FeatureGate } from "@/components/features/feature-access";
+import { ReviewInvitation } from "@/components/platform/review-invitation";
 import { PlatformInbox } from "@/components/platform/inbox";
 import { TeamBanner } from "@/components/platform/team-notices";
 import { DemoBar, DemoChrome, DemoGuide, DemoGuideSpace } from "@/components/demo/demo-chrome";
@@ -296,6 +297,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
 
             <CaptureButton />
+            {mode === "cloud" && user && <ReviewInvitation key={user.id} userId={user.id}
+              blocked={drawerOpen || paletteOpen || appearanceOpen || flyoutOpen} />}
             {demo ? <DemoGuide /> : <FileJanitor />}
 
             {(paletteOpen || paletteUsed) && (

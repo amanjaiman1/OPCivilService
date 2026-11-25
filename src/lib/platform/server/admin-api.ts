@@ -120,6 +120,45 @@ export const ADMIN_ROUTES: AdminRoute[] = [
     run: (ctx) => ctx.deps.rpc("platform_admin_overview", actorArgs(ctx)),
   },
 
+  {
+    method: "GET",
+    path: "attention",
+    permission: "admin.access",
+    run: (ctx) => ctx.deps.rpc("platform_admin_attention", actorArgs(ctx)),
+  },
+  {
+    method: "POST",
+    path: "attention",
+    permission: "admin.access",
+    run: (ctx) => {
+      const body = ctx.body as { section?: unknown; cursor?: unknown } | null;
+      if ((body?.section !== "reviews" && body?.section !== "feedback") ||
+          typeof body.cursor !== "string" || !/^\d{1,18}$/.test(body.cursor)) {
+        throw new PlatformError(400, "invalid", "Invalid attention position.");
+      }
+      return ctx.deps.rpc("platform_admin_ack_attention", {
+        ...actorArgs(ctx), p_section: body.section, p_version: body.cursor,
+      });
+    },
+  },
+  {
+    method: "GET",
+    path: "resource-usage",
+    permission: "analytics.read",
+    run: (ctx) => {
+      const { limit, offset } = parsePage(ctx.query);
+      const sort = ctx.query.get("sort") ?? "snapshot";
+      const days = Number(ctx.query.get("days") ?? 7);
+      if (![7, 14, 35].includes(days) || !["snapshot", "attachment", "transfer"].includes(sort)) {
+        throw new PlatformError(400, "invalid", "Invalid usage period or sorting.");
+      }
+      return ctx.deps.rpc("platform_admin_resource_usage", {
+        ...actorArgs(ctx), p_days: days, p_sort: sort, p_limit: Math.min(limit, 50),
+        p_offset: offset, p_query: ctx.query.get("q")?.trim().slice(0, 100) ?? "",
+      });
+    },
+  },
+
   /* ── users ── */
   {
     method: "GET",

@@ -1,109 +1,134 @@
 "use client";
 
-/* The one place the app asks for a review: a card on the dashboard, shown
-   only while the database says this account may be asked
-   (platform_review_invite_due: enough real use, no review yet, not
-   postponed or declined). "Later" asks again in two weeks, and the third
-   "Later" or a "No thanks" stops asking. Nothing pops up or blocks the page. */
-
-import { Suspense, lazy, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { MessageSquareHeart, PenLine } from "lucide-react";
 import { useChronicle } from "@/lib/store";
-import { useInbox } from "@/components/platform/inbox";
-import { Card } from "@/components/ui/card";
+import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
+import { hasOpenOverlay, Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
-import { cn } from "@/lib/utils";
+import { useTour } from "@/components/tour/tour-context";
+import { useCapture } from "@/components/capture/capture-provider";
 
-/** The five-step form, downloaded when a student chooses to write: most dashboard visits never do. */
 const ReviewWizard = lazy(() => import("@/components/settings/review-wizard").then((m) => ({ default: m.ReviewWizard })));
-const loadWizard = () => void import("@/components/settings/review-wizard");
 
-export function ReviewInvitation({ className }: { className?: string }) {
-  const inbox = useInbox();
-  const toast = useToast();
-  const router = useRouter();
+async function invitation(action: string, id: string) {
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const result = await supabase?.rpc("platform_claim_review_invitation", { p_action: action, p_id: id, p_zone: zone });
+  if (result?.error) throw result.error;
+  return result?.data === true;
+}
+
+export function ReviewInvitation({ userId, blocked }: { userId: string; blocked: boolean }) {
+  const capture = useCapture();
+  const tour = useTour();
+  const busyOverlay = useRef(false);
+  busyOverlay.current = blocked || capture.opened || tour.isOpen;
   const name = useChronicle((s) => s.profile.name);
+  const [claim, setClaim] = useState<string | null>(null);
   const [writing, setWriting] = useState(false);
-  /** Mounted from the first "Write a review" on, so closing it still animates. */
-  const [opened, setOpened] = useState(false);
-  // Kept while the form is open, so the card doesn't vanish under it.
-  if (!inbox || (!inbox.reviewInvite && !writing)) return null;
+  const [working, setWorking] = useState(false);
+  const toast = useToast();
+
+  useEffect(() => {
+    if (!supabase) return;
+    let alive = true;
+    let running = false;
+    let refreshed = false;
+    let shown = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    function visible() {
+      return document.visibilityState === "visible";
+    }
+    function ready() {
+      return visible() && !busyOverlay.current && !hasOpenOverlay() &&
+        !document.activeElement?.matches("input,textarea,select,[contenteditable=true]");
+    }
+    async function attempt(id: string) {
+      if (!alive || !visible() || running || shown) return;
+      running = true;
+      let reserved = false;
+      try {
+        const { data } = await supabase!.auth.getSession();
+        if (!alive || data.session?.user.id !== userId) return;
+        reserved = await invitation("reserve", id);
+        if (!reserved || !alive) return;
+        // Never interrupt the initial tour, an entry, or another open dialog.
+        const until = Date.now() + 25_000;
+        while (alive && visible() && !ready() && Date.now() < until) {
+          await new Promise((resolve) => setTimeout(resolve, 400));
+        }
+        if (!alive || !ready()) return;
+        shown = await invitation("show", id);
+        if (shown && alive && ready()) setClaim(id);
+      } catch {
+        // Subsequent foreground opens can retry an unavailable claim.
+      } finally {
+        if (reserved && !shown && alive) void invitation("release", id).catch(() => undefined);
+        running = false;
+      }
+    }
+    function foreground() {
+      if (!visible()) {
+        refreshed = false;
+        if (timer) clearTimeout(timer);
+        return;
+      }
+      if (refreshed || shown || running) return;
+      refreshed = true;
+      timer = setTimeout(() => void attempt(crypto.randomUUID()), 2_500);
+    }
+    function blur() {
+      refreshed = false;
+      if (timer) clearTimeout(timer);
+    }
+    document.addEventListener("visibilitychange", foreground);
+    window.addEventListener("blur", blur);
+    window.addEventListener("focus", foreground);
+    foreground();
+    return () => {
+      alive = false;
+      document.removeEventListener("visibilitychange", foreground);
+      window.removeEventListener("blur", blur);
+      window.removeEventListener("focus", foreground);
+      if (timer) clearTimeout(timer);
+    };
+  }, [userId]);
+
+  async function answer(action: "postpone" | "dismiss") {
+    if (!claim || working) return;
+    setWorking(true);
+    try {
+      if (!(await invitation(action, claim))) throw new Error("Invitation is unavailable.");
+      setClaim(null);
+    } catch {
+      toast({ title: "Your choice couldn’t be saved", description: "Try again, or close this invitation for today.", tone: "error" });
+    } finally {
+      setWorking(false);
+    }
+  }
 
   return (
     <>
-      <Card role="region" className={cn("relative overflow-hidden p-5 sm:p-6", className)} aria-labelledby="review-invite-title">
-        <div aria-hidden className="pointer-events-none absolute -right-12 -top-14 h-40 w-40 rounded-full bg-accent/[0.08] blur-2xl" />
-        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 items-start gap-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-accent/[0.12] text-accent">
-              <MessageSquareHeart className="h-[1.1rem] w-[1.1rem]" aria-hidden />
-            </span>
-            <div className="min-w-0">
-              <p className="eyebrow">A request from the team</p>
-              <h2 id="review-invite-title" className="mt-1 text-[0.95rem] font-semibold leading-snug text-paper">
-                How has DoOrDie been for your preparation?
-              </h2>
-              <p className="mt-1 max-w-2xl text-[0.82rem] leading-relaxed text-paper/70">
-                You&apos;ve used it for a while now. A short review, good or bad, tells the team what to improve. It takes about
-                three minutes, and nothing goes on the website unless you choose that.
-              </p>
-            </div>
-          </div>
-          <div className="flex shrink-0 flex-wrap gap-2">
-            <Button
-              onPointerEnter={loadWizard}
-              onFocus={loadWizard}
-              onClick={() => {
-                setOpened(true);
-                setWriting(true);
-              }}
-            >
-              <PenLine className="h-4 w-4" aria-hidden /> Write a review
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                inbox.answerInvite("postpone");
-                toast({ title: "Maybe later, then", description: "You can write one any time from Settings." });
-              }}
-            >
-              Later
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                inbox.answerInvite("dismiss");
-                toast({ title: "We won't ask again", description: "If you change your mind, it's in Settings." });
-              }}
-            >
-              No thanks
-            </Button>
+      <Modal open={claim !== null} onClose={() => setClaim(null)} title="How is your DoOrDie experience?"
+        description="Your feedback helps us improve the platform for aspirants like you."
+        className="sm:max-w-md"
+        footer={<Button onClick={() => { setClaim(null); setWriting(true); }}><PenLine className="h-4 w-4" aria-hidden /> Write a review</Button>}
+      >
+        <div className="space-y-4">
+          <span className="grid h-11 w-11 place-items-center rounded-2xl bg-accent/15 text-accent"><MessageSquareHeart className="h-5 w-5" aria-hidden /></span>
+          <p className="text-sm text-paper/75">Share what helped and what could work better. You choose whether your review can be published.</p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" disabled={working} onClick={() => void answer("postpone")}>Maybe later</Button>
+            <Button variant="ghost" disabled={working} onClick={() => void answer("dismiss")}>Don’t ask me again</Button>
           </div>
         </div>
-      </Card>
-      {opened && (
-        <Suspense fallback={null}>
-      <ReviewWizard
-        open={writing}
-        initial={null}
-        defaultName={name.trim().split(/\s+/)[0] ?? ""}
-        source="invitation"
-        onClose={() => setWriting(false)}
-        onSaved={() => {
-          setWriting(false);
-          inbox.answerInvite("done");
-          toast({
-            title: "Review sent",
-            description: "Thank you. You can see where it stands, or change it, in Settings.",
-            tone: "success",
-            action: { label: "Open Settings", onClick: () => router.push("/settings#review") },
-          });
-        }}
-      />
-        </Suspense>
-      )}
+      </Modal>
+      {writing && <Suspense fallback={<p role="status" className="sr-only">Opening review form</p>}>
+        <ReviewWizard open initial={null} defaultName={name.trim().split(/\s+/)[0] ?? ""} source="invitation"
+          onClose={() => setWriting(false)}
+          onSaved={() => { setWriting(false); toast({ title: "Review sent", description: "You can see its status in Settings.", tone: "success" }); }} />
+      </Suspense>}
     </>
   );
 }

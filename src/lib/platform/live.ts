@@ -100,6 +100,10 @@ export function liveVersionOf(payload: unknown): number | null {
  */
 export function adminAreasFor(path: string): LiveArea[] {
   switch (path.split(/[/?]/)[0]) {
+    case "attention":
+      return ["reviews", "feedback", "settings", "access"];
+    case "resource-usage":
+      return [];
     case "overview":
       return ["users", "reviews", "feedback", "announcements", "changelog", "audit"];
     case "users":

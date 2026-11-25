@@ -339,6 +339,7 @@ export function parseAuditQuery(params: URLSearchParams): Parsed<{ filters: Reco
 export type SettingDef =
   | { kind: "boolean"; label: string; help: string }
   | { kind: "integer"; label: string; help: string; min: number; max: number; unit: string }
+  | { kind: "time"; label: string; help: string }
   | { kind: "email"; label: string; help: string }
   | { kind: "choice"; label: string; help: string; options: { id: string; label: string }[] }
   | { kind: "notice"; label: string; help: string };
@@ -350,8 +351,11 @@ export const SETTINGS = {
   review_invite_enabled: {
     kind: "boolean",
     label: "Invite eligible students",
-    help: "A quiet card on the dashboard only, for everyone who qualifies, with Later and No thanks. It stops after No thanks or the third Later.",
+    help: "Show an invitation at the first eligible app opening, and stop after a permanent dismissal or the third postponement.",
   },
+  review_invite_time: { kind: "time", label: "Invitation starts at", help: "Local time in each account’s saved time zone. The popup waits for the next app opening or return to the app." },
+  review_invite_frequency_days: { kind: "integer", label: "Minimum days between invitations", help: "At most one invitation on any eligible local date.", min: 1, max: 90, unit: "days" },
+  review_invite_postpone_days: { kind: "integer", label: "Postpone for", help: "How long to wait after Maybe later.", min: 1, max: 90, unit: "days" },
   review_edit_policy: {
     kind: "choice",
     label: "When a published review is edited",
@@ -421,6 +425,8 @@ export function settingProblem(key: string, value: unknown): string | null {
     case "integer":
       if (typeof value !== "number" || !Number.isInteger(value)) return "Expected a whole number.";
       return value < def.min || value > def.max ? `Between ${def.min} and ${def.max} ${def.unit}.` : null;
+    case "time":
+      return typeof value === "string" && /^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(value) ? null : "Choose a local time.";
     case "email":
       if (typeof value !== "string") return "Expected an email address.";
       return value === "" || (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value) && value.length <= 200) ? null : "That isn't an email address.";

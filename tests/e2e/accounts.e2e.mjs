@@ -525,7 +525,10 @@ Capture button to visible dialog (ms, first/next/next): ${timings.join(", ")}`);
 
 async function phaseThree(page, student) {
   await page.setViewportSize({ width: 1440, height: 960 });
-  const evening = new Date();
+  // Keep the simulated morning before the real clock so the overnight jump
+  // does not also expire the mock auth token against the browser clock.
+  const evening = new Date(Date.now() - 7 * 60 * 60 * 1000);
+  evening.setDate(evening.getDate() - 1);
   evening.setHours(23, 30, 0, 0);
   await page.clock.setFixedTime(evening);
   await signUp(page, student.name, student.email);
@@ -579,6 +582,28 @@ async function phaseThree(page, student) {
   }
 }
 
+async function webRouteSmoke(page, student) {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signUp(page, student.name, student.email);
+  await onboard(page, student.name);
+  await passSleepPromptIfShown(page);
+  await passTourIfShown(page);
+
+  const routes = ["/dashboard", "/journal", "/subjects", "/revision", "/goals", "/roadmap", "/habits",
+    "/wellbeing", "/wellbeing/sleep", "/coach", "/performance-review", "/books", "/current-affairs",
+    "/mistakes", "/mocks", "/knowledge-graph", "/diary", "/heatmap", "/settings", "/announcements"];
+  const elapsed = [];
+  for (const path of routes) {
+    const start = Date.now();
+    await page.goto(`${APP}${path}`);
+    await page.locator("main h1").first().waitFor();
+    check(new URL(page.url()).pathname === path, `${path} redirected unexpectedly`);
+    check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${path} overflows on mobile`);
+    elapsed.push(`${path}=${Date.now() - start}ms`);
+  }
+  console.log(`\nLocal mobile viewport route checks: ${elapsed.join(", ")}`);
+}
+
 /* ── run ───────────────────────────────────────────────────────── */
 
 async function main() {
@@ -588,7 +613,7 @@ async function main() {
     console.log("Building the app against it (a minute or two)…");
     execFileSync("npx", ["next", "build"], { cwd: root, env, stdio: "ignore" });
   }
-  await start(process.execPath, ["node_modules/next/dist/bin/next", "start", "-p", "3100"], "Ready");
+  await start(process.execPath, ["node_modules/next/dist/bin/next", "start", "-H", "127.0.0.1", "-p", "3100"], "Ready");
   const browser = await chromium.launch();
   const laptop = await browser.newContext(); // one browser profile, shared by A and B
   const phone = await browser.newContext(); // a second device for A
@@ -599,6 +624,11 @@ async function main() {
   const ids = {};
 
   try {
+    if (process.argv.includes("--web-route-smoke")) {
+      await scenario("Authenticated routes render on a phone", () => webRouteSmoke(page, A));
+      await browser.close();
+      return;
+    }
     if (process.argv.includes("--phase-03")) {
       await scenario("Phase 03 sleep and wellbeing", () => phaseThree(page, A));
       await browser.close();

@@ -10,6 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { BarChart } from "@/components/charts/bar-chart";
 import { Sparkline } from "@/components/charts/sparkline";
 import { AdminHeader, ErrorPanel, LoadingRows, Stars, When, actionLabel, ago } from "@/components/admin/ui";
+import { AttentionSummary } from "@/components/admin/attention";
 import { useAdminActor } from "@/components/admin/admin-context";
 import { useAdmin, useRefreshAt } from "@/lib/platform/client";
 import { FEEDBACK_CATEGORY, FEEDBACK_STATUS } from "@/lib/platform/content";
@@ -57,6 +58,7 @@ export default function AdminOverviewPage() {
         title="Overview"
         description="How the platform is doing, from account records and the platform's own tables. Nothing here reads anyone's chronicle."
       />
+      <AttentionSummary />
       <ErrorPanel error={error} onRetry={reload} />
       {loading && !data ? <LoadingRows rows={3} /> : data ? <OverviewBody data={data} canUsers={can("users.read")} role={actor.role} /> : null}
     </div>

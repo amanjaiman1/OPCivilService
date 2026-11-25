@@ -32,8 +32,8 @@ const deps: AdminDeps = {
   allowMutation: mutationLimiter(),
 };
 
-type Params = { params: { path?: string[] } };
-const handle = (request: Request, { params }: Params) => handleAdminRequest(request, params.path ?? [], deps);
+type Params = { params: Promise<{ path?: string[] }> };
+const handle = async (request: Request, { params }: Params) => handleAdminRequest(request, (await params).path ?? [], deps);
 
 export const GET = handle;
 export const POST = handle;

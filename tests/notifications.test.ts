@@ -474,3 +474,20 @@ test("a pushed notice puts its subject on cooldown; the page's own and test push
   assert.equal(merged.lastSentAt.a, at(11).toISOString());
   assert.equal(merged.sentToday, 2);
 });
+
+test("first study entry uses actual work, obeys quiet hours, and only delivers once during the first week", () => {
+  const firstRule = "first-study-entry";
+  const fresh = data({ profile: { ...profile, onboardedAt: TODAY }, journal: [day(TODAY, 0)] });
+  const config = withDefaults({ deliver: true, digest: false, reminderHour: 18 });
+  const freshNotice = (d: ChronicleData, now: Date) => evaluate(d, { now, settings: config }).filter((n) => n.ruleId === firstRule);
+  assert.equal(freshNotice(fresh, at(17)).length, 0);
+  assert.equal(freshNotice(fresh, at(18)).length, 1);
+  assert.equal(freshNotice({ ...fresh, journal: [day(TODAY, 1)] }, at(18)).length, 0);
+  assert.equal(freshNotice({ ...fresh, revisions: [{ ...revision("first", TODAY), passes: [TODAY] }] }, at(18)).length, 0);
+  assert.equal(freshNotice(fresh, at(18, 0, 22)).length, 0);
+  const inbox = buildInbox(freshNotice(fresh, at(18)), null, TODAY);
+  assert.equal(planDelivery(inbox, config, null, at(18)).kind, "individual");
+  assert.equal(planDelivery(inbox, { ...config, digest: true }, null, at(23)).kind, "none");
+  const log = recordDelivery(null, inbox.deliverable, at(18));
+  assert.equal(planDelivery(buildInbox(freshNotice(fresh, at(18, 0, 16)), null, "2026-11-16"), config, log, at(18, 0, 16)).kind, "none");
+});

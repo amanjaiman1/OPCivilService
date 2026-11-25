@@ -1,4 +1,5 @@
 import {
+  Database,
   History,
   KeyRound,
   LayoutDashboard,
@@ -26,6 +27,7 @@ export const ADMIN_NAV: { label: string; items: AdminNavItem[] }[] = [
     label: "Platform",
     items: [
       { href: "/admin", label: "Overview", icon: LayoutDashboard, permission: "admin.access", description: "How the platform is doing" },
+      { href: "/admin/resource-usage", label: "Resource usage", icon: Database, permission: "analytics.read", description: "Storage footprint and estimated sync transfer" },
       { href: "/admin/users", label: "Users", icon: Users, permission: "users.read", description: "Accounts, sign-ins and suspensions" },
       { href: "/admin/reviews", label: "Reviews", icon: Star, permission: "reviews.moderate", description: "Moderate what students wrote" },
       { href: "/admin/feedback", label: "Feedback", icon: MessageSquareText, permission: "feedback.manage", description: "Messages from students, and crash reports" },
