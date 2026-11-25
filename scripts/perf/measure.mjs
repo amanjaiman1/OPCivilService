@@ -19,6 +19,7 @@
  */
 
 import { spawn, execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,7 +29,8 @@ import { buildDataset } from "./dataset.ts";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const APP = "http://localhost:3100";
 const MOCK = "http://localhost:54321";
-const PASSWORD = "studyHard2027";
+// Each run creates its own accounts in the local mock Supabase.
+const PASSWORD = randomUUID();
 
 const arg = (name, fallback) => {
   const i = process.argv.indexOf(`--${name}`);
@@ -302,7 +304,7 @@ async function signedInState(browser, profile, dataset) {
 }
 
 const ROUTES = [
-  ["/dashboard", "Command Center"],
+  ["/dashboard", "Home"],
   ["/journal", "Daily Journal"],
   ["/wellbeing", "Life Dashboard"],
   ["/goals", "Goals"],
@@ -383,16 +385,12 @@ async function measureNav(browser, profile, state) {
   const passes = [];
   for (let pass = 0; pass < 2; pass++) {
     const times = {};
-    const order = [...targets, ["/dashboard", "Command Center"]];
+    const order = [...targets, ["/dashboard", "Home"]];
     for (const [path, label] of order) {
-      const link = mobile
-        ? page.locator(`nav[aria-label="Quick access"] a[href="${path}"]`).first()
-        : page.locator(`aside a[href="${path}"]`).first();
-      if (mobile && path === "/dashboard") {
-        await page.goto(`${APP}/dashboard`);
-        await page.evaluate(() => window.__perf.when("main h1"));
-        continue;
-      }
+      if (mobile) await page.getByRole("button", { name: "Open menu", exact: true }).click();
+      const link = page.locator(`aside a[href="${path}"]`).first();
+      await link.waitFor({ state: "visible" });
+      if (mobile) await page.waitForTimeout(400);
       const before = await page.evaluate(() => window.__perf.longtasks.length);
       // Input as a person gives it: on a laptop the pointer rests on the link a
       // moment before the click; on a phone a finger lands on it. The time is
@@ -633,7 +631,7 @@ async function main() {
     console.log("Building the app against it…");
     execFileSync("npx", ["next", "build"], { cwd: root, env, stdio: "ignore" });
   }
-  await start("npx", ["next", "start", "-p", "3100"], "Ready");
+  await start(process.execPath, ["node_modules/next/dist/bin/next", "start", "-p", "3100"], "Ready");
   const browser = await chromium.launch();
   results.chromium = browser.version();
   try {

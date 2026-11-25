@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
+import { CaptureSectionButton } from "@/components/capture/capture-trigger";
 import {
   ArrowUpRight,
   CalendarCheck,
@@ -120,9 +121,10 @@ export function WelcomePanel({ className }: { className?: string }) {
           />
         </div>
 
-        <h1 className="mt-5 text-[1.7rem] font-semibold leading-[1.15] tracking-[-0.035em] text-paper sm:text-[2rem]">
+        <h1 className="mt-5 text-xs font-semibold text-paper/65">Home</h1>
+        <p className="mt-1 text-[1.7rem] font-semibold leading-[1.15] tracking-[-0.035em] text-paper sm:text-[2rem]">
           {greeting()}, {firstName}.
-        </h1>
+        </p>
         <p className="mt-1.5 text-[0.88rem] text-paper/65">
           Day <span className="tabular font-semibold text-paper">{journeyDay}</span> of your preparation for{" "}
           {profile.targetExam}.
@@ -139,13 +141,12 @@ export function WelcomePanel({ className }: { className?: string }) {
         )}
 
         <div className="mt-auto flex flex-wrap gap-2 pt-6">
-          <Link
-            href="/journal?new=1"
+          <CaptureSectionButton target={{}}
             className="inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2.5 text-sm font-semibold text-accent-fg shadow-accent transition-all duration-200 hover:-translate-y-px hover:brightness-[1.06]"
           >
             <Plus className="h-4 w-4" />
             Log today&apos;s study
-          </Link>
+          </CaptureSectionButton>
           <Link
             href="/journal"
             className="glass-ghost inline-flex items-center gap-1.5 rounded-full border border-line px-4 py-2.5 text-sm font-semibold text-paper transition-colors hover:border-paper/25"
@@ -384,8 +385,7 @@ export function TodayPanel({ className }: { className?: string }) {
         )}
 
         <div className="mt-auto pt-5">
-          <Link
-            href="/journal?new=1"
+          <CaptureSectionButton target={{}}
             className={cn(
               "flex w-full items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition-all duration-200",
               entry
@@ -395,7 +395,7 @@ export function TodayPanel({ className }: { className?: string }) {
           >
             <NotebookPen className="h-4 w-4" />
             {entry ? "Update today's entry" : "Log today's study"}
-          </Link>
+          </CaptureSectionButton>
         </div>
       </div>
     </Panel>

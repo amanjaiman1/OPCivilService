@@ -479,3 +479,20 @@ classes, plus a few hooks: `field` on any hand-styled input or select,
 floating panel, and `glass-on-scrim` on a dialog that sits over a blurred
 scrim. Check new screens in every theme, with Reduce transparency on, and at
 phone, tablet and desktop widths.
+
+
+## Application shell and entry controls
+
+The desktop rail contains the Home shortcut, account, navigation toggle,
+Add entry and utilities. The sidebar groups destinations. At smaller
+widths the menu opens the sidebar and a single safe-area-aware Add entry
+button stays available at the bottom of the screen.
+
+Forms share the existing surface and status tokens. Text inputs, selects
+and primary sheet controls have room for touch, and keyboard focus uses
+the theme’s accent ring. Inline field errors use the same accessible
+description as hints. Daily Capture uses a solid tab surface and compact
+semantic groups. A selected tab and a written save status communicate
+state independently of color. Shared dialogs contain focus and restore
+it to the opener. The entry guide uses a short opacity and position
+transition, with position and duration removed for reduced motion.

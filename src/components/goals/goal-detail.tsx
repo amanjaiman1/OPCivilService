@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { CaptureSectionButton } from "@/components/capture/capture-trigger";
 import {
   BookOpen,
   Check,
@@ -699,9 +700,9 @@ function LinksTab({ goal }: { goal: Goal }) {
           </div>
         ) : (
           journal.length === 0 && (
-            <Link href="/journal?new=1" className="inline-flex items-center gap-1 text-[0.78rem] font-semibold text-accent hover:underline">
+            <CaptureSectionButton target={{ section: "goals" }} nested className="inline-flex items-center gap-1 text-[0.78rem] font-semibold text-accent hover:underline">
               Write today&rsquo;s journal entry <ChevronRight className="h-3.5 w-3.5" />
-            </Link>
+            </CaptureSectionButton>
           )
         )}
       </Section>

@@ -12,6 +12,7 @@
  */
 
 import { spawn, execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
@@ -19,7 +20,8 @@ import { chromium } from "playwright";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const APP = "http://localhost:3100";
 const MOCK = "http://localhost:54321";
-const PASSWORD = "studyHard2027";
+// Each run creates its own accounts in the local mock Supabase.
+const PASSWORD = randomUUID();
 
 const mockEnv = Object.fromEntries(
   execFileSync("node", ["scripts/mock-supabase.mjs", "--print-env"], { cwd: root, encoding: "utf8" })
@@ -350,11 +352,175 @@ async function phaseOne(page, phone, student) {
   await page.getByText(/From Revision/, { exact: false }).first().waitFor();
 
   await page.goto(`${APP}/goals`);
+  const studyGoals = page.getByRole("region", { name: "Study" });
+  await studyGoals.getByRole("link", { name: /Complete Federal practice drill/ }).waitFor();
+  await page.getByRole("button", { name: /^Completed ·/ }).click();
+  const milestone = studyGoals.getByRole("link", { name: /Finish the first practice set/ });
+  await milestone.waitFor();
+  await milestone.click();
+  await page.waitForURL((url) => url.pathname === "/roadmap" && url.searchParams.get("plan") === first.id && url.searchParams.has("item"));
+  await page.goto(`${APP}/goals`);
   await page.getByRole("button", { name: "New goal", exact: true }).click();
   const goal = page.getByRole("dialog", { name: "New goal" });
   await goal.getByLabel("Name", { exact: true }).fill("Read five hours this week");
   await goal.getByRole("button", { name: "Add goal", exact: true }).click();
   await page.getByRole("region", { name: "Study" }).getByText("Read five hours this week", { exact: true }).waitFor();
+}
+
+async function phaseTwo(page, student) {
+  await signUp(page, student.name, student.email);
+  await onboard(page, student.name);
+  await passSleepPromptIfShown(page);
+  await passTourIfShown(page);
+  await page.getByRole("heading", { name: "Home", exact: true }).waitFor();
+  const trigger = page.getByRole("button", { name: "Add entry", exact: true });
+  const workspace = page.getByRole("dialog", { name: "Daily Capture", exact: true });
+  const evidence = process.env.OPC_PHASE_EVIDENCE;
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const home = page.url();
+  const round = await trigger.evaluate((element) => {
+    const { width, height } = element.getBoundingClientRect();
+    return width === height && parseFloat(getComputedStyle(element).borderTopLeftRadius) >= width / 2;
+  });
+  check(round, "the desktop Capture button is not circular");
+  await trigger.click();
+  await workspace.waitFor();
+  check(page.url() === home, "opening from Home changed the address");
+  await workspace.getByRole("button", { name: "Close", exact: true }).first().click();
+  await workspace.waitFor({ state: "detached" });
+  check(await trigger.evaluate((element) => document.activeElement === element), "closing did not restore focus");
+  if (evidence) await page.screenshot({ path: join(evidence, "after-desktop.png") });
+
+  await page.goto(`${APP}/journal`);
+  await page.getByRole("heading", { name: "Daily Journal", exact: true }).waitFor();
+  check(await workspace.count() === 0, "the ordinary journal opened Capture");
+  await page.goto(`${APP}/subjects`);
+  await trigger.waitFor();
+  const subjects = page.url();
+  const timings = [];
+  for (let run = 0; run < 3; run++) {
+    const start = Date.now();
+    await trigger.click();
+    await workspace.waitFor();
+    timings.push(Date.now() - start);
+    await workspace.getByRole("button", { name: "Close", exact: true }).first().click();
+    await workspace.waitFor({ state: "detached" });
+  }
+  console.log(`
+Capture button to visible dialog (ms, first/next/next): ${timings.join(", ")}`);
+  await page.keyboard.press("Alt+n");
+  await workspace.waitFor();
+  await page.keyboard.press("Alt+n");
+  check(await workspace.count() === 1 && page.url() === subjects, "keyboard opening duplicated Capture or changed pages");
+  await workspace.getByRole("button", { name: /Add a subject/ }).click();
+  await workspace.getByLabel("Subject 1", { exact: true }).selectOption({ label: "Polity & Governance" });
+  await workspace.getByLabel("Hours for subject 1", { exact: true }).fill("2");
+  const hours = workspace.getByLabel("Hours for subject 1", { exact: true });
+  await hours.fill("25");
+  await workspace.getByRole("button", { name: "Save All Changes", exact: true }).click();
+  await workspace.getByText(/A day cannot exceed|Study time cannot|24 hours/i).first().waitFor();
+  check(await workspace.isVisible(), "validation closed the form");
+  await hours.fill("2");
+  const study = workspace.getByRole("tab", { name: /^Study/ });
+  await study.focus();
+  await study.press("ArrowRight");
+  const life = workspace.getByRole("tab", { name: /^Life/ });
+  check(await life.getAttribute("aria-selected") === "true", "arrow key did not select Life");
+  await workspace.getByTestId("life-form").waitFor();
+  if (evidence) await workspace.screenshot({ path: join(evidence, "after-life.png") });
+  await page.goBack();
+  await workspace.waitFor({ state: "detached" });
+  check(page.url() === subjects, "Back left the underlying page instead of closing Capture");
+  await trigger.click();
+  await workspace.getByLabel("Hours for subject 1", { exact: true }).waitFor();
+  check(await workspace.getByLabel("Hours for subject 1", { exact: true }).inputValue() === "2", "draft was lost on Back");
+  await workspace.getByRole("button", { name: "Close", exact: true }).first().click();
+  await page.getByRole("dialog", { name: "Close without saving?" }).getByRole("button", { name: "Close", exact: true }).last().click();
+  await workspace.waitFor({ state: "detached" });
+
+  const date = new Date();
+  date.setDate(date.getDate() - 1);
+  const yesterday = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  await page.goto(`${APP}/journal?section=life&date=${yesterday}`);
+  await workspace.getByTestId("life-form").waitFor();
+  check(await workspace.getByLabel("Date", { exact: true }).inputValue() === yesterday, "the historical date was lost");
+  await workspace.getByRole("button", { name: "Choose fields" }).click();
+  const fields = page.getByRole("dialog", { name: "What you track" });
+  for (const field of ["Walking", "Running", "Meditation", "Weight", "Deep work"]) {
+    const option = fields.getByRole("button", { name: new RegExp(`^${field}`) });
+    if ((await option.getAttribute("aria-pressed")) === "false") await option.click();
+  }
+  await fields.getByRole("button", { name: "Save", exact: true }).click();
+  for (const name of ["Exercise (min)", "Walked (km)", "Ran (km)", "Water (L)", "Meditation (min)", "Screen time (min)", "Weight (kg)", "Deep work (h)", "Time asleep, if different (h)"]) {
+    check(await workspace.getByLabel(name, { exact: true }).isVisible(), `missing Life field: ${name}`);
+  }
+  await workspace.getByLabel("Water (L)", { exact: true }).fill("0");
+  if (evidence) await workspace.screenshot({ path: join(evidence, "after-life.png") });
+  await workspace.getByRole("button", { name: "Save All Changes", exact: true }).click();
+  await waitFor("zero water and no unrelated reading in the cloud", async () => {
+    const saved = await lifeDayOf(student.email, yesterday);
+    return saved?.waterLiters === 0 && saved?.weightKg === undefined;
+  });
+  await workspace.waitFor({ state: "detached" });
+  await page.reload();
+  await page.getByRole("heading", { name: "Daily Journal", exact: true }).waitFor();
+  check(await workspace.count() === 0, "the dismissed explicit link reopened Capture");
+
+  await page.goto(`${APP}/revision`);
+  await waitFor("saved profile from Life fields", async () => (await cloudOf(student.email))?.data?.profile?.lifeFields?.length === 9);
+  const before = await cloudOf(student.email);
+  const guideButton = page.getByRole("button", { name: "Entry guide · Log a revision" });
+  await guideButton.click();
+  const guide = page.getByRole("dialog", { name: "Log a revision" });
+  for (let i = 0; i < 3; i++) await guide.getByRole("button", { name: "Next" }).click();
+  await guide.getByRole("button", { name: "Recall a sample topic" }).click();
+  await guide.getByText(/A recorded pass updates the schedule/).waitFor();
+  if (evidence) await guide.screenshot({ path: join(evidence, "after-entry-guide.png") });
+  await guide.getByRole("button", { name: "Done" }).click();
+  check(await guideButton.evaluate((element) => document.activeElement === element), "guide did not restore focus");
+  const after = await cloudOf(student.email);
+  check(JSON.stringify(before?.data) === JSON.stringify(after?.data), "the guide changed account data");
+
+  await page.goto(`${APP}/settings#appearance`);
+  await page.getByRole("radio", { name: /^Dark/ }).click();
+  await waitFor("dark theme", async () => (await htmlAttr(page, "data-surface")) === "black");
+  await page.goto(`${APP}/revision`);
+  for (const [width, height] of [[320, 720], [390, 844], [768, 1024], [1024, 768], [1720, 1000]]) {
+    await page.setViewportSize({ width, height });
+    await trigger.click();
+    await workspace.getByRole("tab", { name: /^Life/ }).click();
+    const box = await workspace.boundingBox();
+    check(box && box.x >= 0 && box.x + box.width <= width + 1 && box.y + box.height <= height + 1, `Capture exceeds ${width}×${height}`);
+    const overflow = await workspace.evaluate((element) => element.scrollWidth > element.clientWidth + 1);
+    check(!overflow, `Capture has horizontal overflow at ${width}px`);
+    if (evidence && width === 390) await workspace.screenshot({ path: join(evidence, "after-mobile.png") });
+    await workspace.getByRole("button", { name: "Close", exact: true }).first().click();
+    const close = page.getByRole("dialog", { name: "Close without saving?" });
+    if (await close.isVisible()) await close.getByRole("button", { name: "Close", exact: true }).last().click();
+    else {
+      await Promise.race([close.waitFor(), workspace.waitFor({ state: "detached" })]);
+      if (await close.isVisible()) await close.getByRole("button", { name: "Close", exact: true }).last().click();
+    }
+    await workspace.waitFor({ state: "detached" });
+  }
+
+  const bedtime = new Date();
+  bedtime.setHours(22, 25, 0, 0);
+  const night = new Date(bedtime);
+  night.setDate(night.getDate() + 1);
+  const nightDate = night.toLocaleDateString("en-CA");
+  await page.clock.setFixedTime(bedtime);
+  await page.goto(`${APP}/revision`);
+  const bedAction = page.getByRole("button", { name: "Going to bed now" });
+  const confirmBedtime = page.getByRole("dialog", { name: "Record bedtime?" });
+  await bedAction.click();
+  await confirmBedtime.getByRole("button", { name: "Cancel", exact: true }).click();
+  await confirmBedtime.waitFor({ state: "detached" });
+  check(!(await lifeDayOf(student.email, nightDate))?.bedtime, "cancelling bedtime wrote a sleep record");
+  await bedAction.click();
+  await confirmBedtime.getByRole("button", { name: "Record bedtime", exact: true }).click();
+  await waitFor("confirmed bedtime in the cloud", async () => (await lifeDayOf(student.email, nightDate))?.bedtime === "22:25");
 }
 
 /* ── run ───────────────────────────────────────────────────────── */
@@ -366,7 +532,7 @@ async function main() {
     console.log("Building the app against it (a minute or two)…");
     execFileSync("npx", ["next", "build"], { cwd: root, env, stdio: "ignore" });
   }
-  await start("npx", ["next", "start", "-p", "3100"], "Ready");
+  await start(process.execPath, ["node_modules/next/dist/bin/next", "start", "-p", "3100"], "Ready");
   const browser = await chromium.launch();
   const laptop = await browser.newContext(); // one browser profile, shared by A and B
   const phone = await browser.newContext(); // a second device for A
@@ -377,6 +543,12 @@ async function main() {
   const ids = {};
 
   try {
+    if (process.argv.includes("--phase-02")) {
+      await scenario("Phase 02 Capture and contextual guidance", () => phaseTwo(page, A));
+      await browser.close();
+      return;
+    }
+
     if (process.argv.includes("--phase-01")) {
       await scenario("Phase 01 works on desktop and mobile", () => phaseOne(page, phone, A));
       await browser.close();

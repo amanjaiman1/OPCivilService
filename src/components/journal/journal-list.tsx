@@ -1,7 +1,7 @@
 "use client";
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Plus,
   Trash2,
@@ -35,18 +35,18 @@ import { toISODate, fromISODate, weekday, formatHours, relativeDay, formatDate, 
 import { beginRouteTransition } from "@/components/layout/route-transition";
 
 type Sort = "newest" | "oldest";
+import { useCapture } from "@/components/capture/capture-provider";
+
 type Tab = "entries" | "topics" | "analysis";
 
 /** Months are rendered a few at a time, so a year of entries doesn't all mount at once. */
 const PAGE = 45;
 
-/**
- * Every journal day: search, filters, topics and analysis. On /journal it sits
- * under the Daily Capture form (`onCapture` reopens it); /journal/history
- * shows it on its own.
- */
-export function JournalList({ onCapture }: { onCapture?: () => void } = {}) {
+/** Browse daily records, topics and analysis, and edit historical entries. */
+export function JournalList({ legacyComposerLink = false }: { legacyComposerLink?: boolean } = {}) {
+  const capture = useCapture();
   const router = useRouter();
+  const search = useSearchParams().toString();
   const hydrated = useHasHydrated();
   const journal = useChronicle((s) => s.journal);
   const subjects = useChronicle((s) => s.subjects);
@@ -83,18 +83,25 @@ export function JournalList({ onCapture }: { onCapture?: () => void } = {}) {
     return () => window.clearTimeout(id);
   }, [router]);
 
-  // ?new=1 opens today's entry; ?tab=topics opens the topics view. Only once
-  // the store has hydrated, or today's entry wouldn't be found yet.
   useEffect(() => {
-    if (typeof window === "undefined" || !hydrated) return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("tab") === "topics" || params.get("tab") === "analysis") setTab(params.get("tab") as Tab);
-    if (params.get("new") === "1" && !onCapture) {
+    if (!hydrated) return;
+    const url = new URL(window.location.href);
+    const view = url.searchParams.get("tab");
+    setTab(view === "topics" || view === "analysis" ? view : "entries");
+    if (url.searchParams.get("new") === "1" && legacyComposerLink) {
       startNew();
-      window.history.replaceState({}, "", "/journal/history");
+      url.searchParams.delete("new");
+      window.history.replaceState(null, "", url.pathname + url.search + url.hash);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated]);
+  }, [hydrated, search, legacyComposerLink]);
+
+  function selectTab(next: Tab) {
+    setTab(next);
+    const url = new URL(window.location.href);
+    if (next === "entries") url.searchParams.delete("tab");
+    else url.searchParams.set("tab", next);
+    if (url.href !== window.location.href) window.history.pushState(null, "", url.pathname + url.search + url.hash);
+  }
 
   const subjectName = useMemo(() => {
     const m = new Map(subjects.map((s) => [s.id, s.name] as const));
@@ -211,11 +218,10 @@ export function JournalList({ onCapture }: { onCapture?: () => void } = {}) {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Daily Journal"
-        title="Every day, written down."
+        title="Daily Journal"
         description="Search any day you've logged, or switch view to see your topics and what the days add up to. Record today in Daily Capture."
         actions={
-          <Button onClick={() => (onCapture ? onCapture() : router.push("/journal"))}>
+          <Button onClick={() => capture.open()} onFocus={capture.prepare} disabled={!capture.available}>
             <Plus className="h-4 w-4" /> {journal.some((j) => j.date === today) ? "Update today" : "Capture today"}
           </Button>
         }
@@ -223,7 +229,7 @@ export function JournalList({ onCapture }: { onCapture?: () => void } = {}) {
 
       <Segmented
         value={tab}
-        onChange={(v) => setTab(v)}
+        onChange={selectTab}
         options={[
           { label: "Entries", value: "entries" },
           { label: "Topics", value: "topics" },

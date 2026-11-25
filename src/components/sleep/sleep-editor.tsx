@@ -74,6 +74,7 @@ export function SleepTimes({
   bedChips,
   wakeChips,
   target,
+  compact = false,
 }: {
   date: ISODate;
   bedtime: string;
@@ -84,18 +85,20 @@ export function SleepTimes({
   bedChips?: TimeChip[];
   wakeChips?: TimeChip[];
   target?: SleepTarget;
+  compact?: boolean;
 }) {
   const check = checkSleep(date, bedtime, wakeTime);
   const note = targetNote(check, bedtime, target, format);
   const night = nightLabel(date);
 
   return (
-    <div className="space-y-4">
+    <div className={compact ? "space-y-2" : "space-y-4"}>
       <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-2 sm:gap-3">
         <TimeField
           label="Went to bed"
           icon={Moon}
           context="bed"
+          size={compact ? "md" : undefined}
           value={bedtime}
           onChange={onBedtime}
           format={format}
@@ -103,11 +106,12 @@ export function SleepTimes({
           sheetDescription={`The night of ${night}`}
           chips={bedChips}
         />
-        <ArrowRight className="mt-11 h-4 w-4 shrink-0 text-paper/35" aria-hidden />
+        <ArrowRight className={cn("h-4 w-4 shrink-0 text-paper/45", compact ? "mt-8" : "mt-11")} aria-hidden />
         <TimeField
           label="Woke up"
           icon={Sunrise}
           context="wake"
+          size={compact ? "md" : undefined}
           value={wakeTime}
           onChange={onWakeTime}
           format={format}
@@ -117,9 +121,9 @@ export function SleepTimes({
         />
       </div>
 
-      <div
+      {(!compact || bedtime || wakeTime) && <div
         className={cn(
-          "flex min-h-[3.25rem] flex-col items-center justify-center rounded-2xl border px-4 py-2.5 text-center",
+          compact ? "rounded-xl border px-3 py-2" : "flex min-h-[3.25rem] flex-col items-center justify-center rounded-2xl border px-4 py-2.5 text-center",
           check.ok
             ? check.level === "ok"
               ? "border-accent/25 bg-accent/[0.06]"
@@ -157,7 +161,7 @@ export function SleepTimes({
             <TriangleAlert className="h-3.5 w-3.5 shrink-0" /> {check.message}
           </p>
         )}
-      </div>
+      </div>}
     </div>
   );
 }

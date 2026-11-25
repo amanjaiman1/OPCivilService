@@ -200,6 +200,7 @@ export default function MistakesPage() {
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [open, setOpen] = useState(false);
+  const [attemptedEntry, setAttemptedEntry] = useState(false);
   const [draft, setDraft] = useState<Mistake>(emptyMistake(""));
 
   const subjectName = (id: string) =>
@@ -275,6 +276,7 @@ export default function MistakesPage() {
           <Button
             onClick={() => {
               setDraft(emptyMistake(subjects[0]?.id ?? ""));
+              setAttemptedEntry(false);
               setOpen(true);
             }}
           >
@@ -314,6 +316,7 @@ export default function MistakesPage() {
             <Button
               onClick={() => {
                 setDraft(emptyMistake(subjects[0]?.id ?? ""));
+                setAttemptedEntry(false);
                 setOpen(true);
               }}
             >
@@ -640,7 +643,7 @@ export default function MistakesPage() {
         open={open}
         onClose={() => setOpen(false)}
         title="Log a mistake"
-        description="Capture it as a learning asset — question, your answer, the correction."
+        description="Enter a topic or the question. Add the correction when you know it."
         className="sm:max-w-xl"
         footer={
           <>
@@ -650,7 +653,7 @@ export default function MistakesPage() {
             <Button
               onClick={() => {
                 if (!draft.topic.trim() && !draft.question?.trim()) {
-                  toast({ title: "Add the topic or the question", description: "Either is enough to find it again and review it.", tone: "error" });
+                  setAttemptedEntry(true);
                   return;
                 }
                 const added = !mistakes.some((m) => m.id === draft.id);
@@ -697,14 +700,14 @@ export default function MistakesPage() {
             </Field>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Topic">
+            <Field label="Topic" error={attemptedEntry && !draft.topic.trim() && !draft.question?.trim() ? "Enter the topic or fill in the question below." : undefined}>
               <Input
                 value={draft.topic}
                 onChange={(e) => setDraft({ ...draft, topic: e.target.value })}
                 placeholder="e.g. Anti-Defection Law"
               />
             </Field>
-            <Field label="Source">
+            <Field label="Source" optional>
               <Input
                 value={draft.source ?? ""}
                 onChange={(e) => setDraft({ ...draft, source: e.target.value })}
@@ -721,14 +724,14 @@ export default function MistakesPage() {
             />
           </Field>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Your answer">
+            <Field label="Your answer" optional>
               <Input
                 value={draft.userAnswer ?? ""}
                 onChange={(e) => setDraft({ ...draft, userAnswer: e.target.value })}
                 placeholder="What you marked"
               />
             </Field>
-            <Field label="Correct answer">
+            <Field label="Correct answer" optional>
               <Input
                 value={draft.correctAnswer ?? ""}
                 onChange={(e) =>

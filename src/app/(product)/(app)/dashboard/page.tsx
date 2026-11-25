@@ -21,7 +21,7 @@ import { HabitsPanel } from "@/components/habits/habits-panel";
 import { ReviewInvitation } from "@/components/platform/review-invitation";
 
 /**
- * The Command Center. One twelve-column grid whose proportions follow what
+ * Home. One twelve-column grid whose proportions follow what
  * matters: the greeting and the headline numbers, then the year of activity
  * beside today, then study performance, then revision, mocks and goals, then
  * the plan and the milestones.
@@ -32,7 +32,7 @@ import { ReviewInvitation } from "@/components/platform/review-invitation";
  * between 1280 and 1440 the docked sidebar leaves too little room for three
  * cards side by side.
  */
-export default function CommandCenter() {
+export default function HomePage() {
   const hydrated = useHasHydrated();
   const hasPlans = useChronicle((s) => activePlans(s.plans).length > 0);
   if (!hydrated) return <Loading />;

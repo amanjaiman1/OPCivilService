@@ -9,6 +9,8 @@ import { RouteTransition } from "./route-transition";
 import { PageTransition } from "./page-transition";
 import { Topbar } from "./topbar";
 import { CaptureButton } from "./bottom-nav";
+import { CaptureProvider } from "@/components/capture/capture-provider";
+import { hasOpenOverlay } from "@/components/ui/modal";
 import { FileJanitor } from "@/components/attachments/file-janitor";
 import { NotificationsProvider } from "@/components/notifications/use-notifications";
 import { TourProvider } from "@/components/tour/tour-provider";
@@ -26,7 +28,7 @@ import { loadAppearance, loadPalette } from "./overlays";
 const CommandPalette = lazy(() => loadPalette().then((m) => ({ default: m.CommandPalette })));
 const AppearanceModal = lazy(() => loadAppearance().then((m) => ({ default: m.AppearanceModal })));
 
-/** Warmed in idle time: the Command Center and the four everyday pages (the phone's dock). */
+/** Warmed in idle time: Home and the four everyday pages (the phone's dock). */
 const WARM_PAGES = ["/dashboard", ...essentialNavItems.map((i) => i.href)];
 /** Every page in the navigation: what's counted, to learn which ones this device opens most. */
 const NAV_PAGES = allNavItems.map((i) => i.href);
@@ -114,7 +116,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // ⌘K / Ctrl+K opens the palette.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k" && !hasOpenOverlay()) {
         e.preventDefault();
         setPaletteOpen((o) => !o);
       }
@@ -169,6 +171,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <NotificationsProvider>
       <MotionConfig reducedMotion="user">
         <TourProvider>
+          <CaptureProvider key={accountId ?? mode}>
           <div className="app-root relative flex h-[100dvh] overflow-hidden">
             {/* The page-to-page wait. Driven from the tap rather than from the
                 router; see `route-transition.tsx`. In Suspense because it reads
@@ -306,6 +309,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </Suspense>
             )}
           </div>
+          </CaptureProvider>
         </TourProvider>
       </MotionConfig>
     </NotificationsProvider>

@@ -21,6 +21,7 @@
  */
 
 import { spawn, execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -32,7 +33,8 @@ import { PRODUCT_MODULES } from "../../src/content/product-status.ts";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const APP = "http://localhost:3100";
 const MOCK = "http://localhost:54321";
-const PASSWORD = "studyHard2027";
+// Each run creates its own accounts in the local mock Supabase.
+const PASSWORD = randomUUID();
 const SHOTS = join(root, "..", "admin-e2e-shots");
 
 // `next start` keeps the public pages it rebuilt from one run to the next,
@@ -1064,7 +1066,7 @@ async function trustBrowserScenarios(browser, people) {
     await wizard.getByLabel("What would you tell another aspirant considering DoOrDie?").fill("Log honestly for two weeks and the dashboard starts to mean something.");
     await next.click();
     await wizard.getByRole("button", { name: "Daily Journal", exact: true }).click();
-    await wizard.getByRole("button", { name: "Command Center", exact: true }).click();
+    await wizard.getByRole("button", { name: "Home", exact: true }).click();
     await next.click();
     await wizard.getByText("Full time or working").first().waitFor();
     await next.click();
@@ -1229,7 +1231,7 @@ async function helpScenarios(browser, people) {
     check(!(await visitor.getByTestId("help-feedback-button").count()), "the demo has the button");
     await visitor.close();
 
-    // A signed-in student on a phone: the button sits above the dock.
+    // A signed-in student on a phone: the help button sits above the entry button.
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
     const page = await ctx.newPage();
     await signInUi(page, s4.email, "/dashboard");
@@ -1238,10 +1240,9 @@ async function helpScenarios(browser, people) {
     const button = page.getByTestId("help-feedback-button");
     await button.waitFor();
     await page.waitForTimeout(800);
-    const [b, dock] = [await button.boundingBox(), await page.getByRole("navigation", { name: "Quick access" }).boundingBox()];
-    check(b && dock && b.y + b.height <= dock.y && b.x + b.width <= 390, `the button overlaps the dock: ${JSON.stringify({ b, dock })}`);
-    // /journal opens the Daily Capture form over the page; the journal on its own is /journal/history.
-    await page.goto(`${APP}/journal/history`);
+    const [b, entry] = [await button.boundingBox(), await page.getByRole("button", { name: "Add entry", exact: true }).boundingBox()];
+    check(b && entry && b.y + b.height <= entry.y && b.x + b.width <= 390, `help overlaps entry: ${JSON.stringify({ b, entry })}`);
+    await page.goto(`${APP}/journal`);
     await button.waitFor();
 
     await button.click();
@@ -1667,6 +1668,7 @@ async function refreshScenarios(browser, people) {
 
     // The audit log: an entry made elsewhere arrives on top; older ones stay.
     await go("Audit log");
+    await page.locator('main [aria-busy="false"] ol li').first().waitFor();
     check((await sql(`insert into public.platform_admin_audit_log (actor_id, actor_role, action, target_type, target_id, reason) values ('${owner.id}', 'super_admin', 'user.suspended', 'user', '${student.id}', 'Refresh audit check ${RUN}')`)).ok, "an audit entry added elsewhere");
     await page.waitForTimeout(1_000);
     check(!(await page.getByText(`“Refresh audit check ${RUN}”`).count()), "the audit entry arrived without a refresh");
@@ -1761,7 +1763,7 @@ async function main() {
   // The mock's database starts empty every run, so answers Next stored from an
   // earlier run (published reviews, changelog entries) would be wrong here.
   rmSync(join(root, ".next", "cache", "fetch-cache"), { recursive: true, force: true });
-  await start("npx", ["next", "start", "-p", "3100"], "Ready");
+  await start(process.execPath, ["node_modules/next/dist/bin/next", "start", "-p", "3100"], "Ready");
   const browser = await chromium.launch();
   try {
     const people = {

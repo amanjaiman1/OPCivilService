@@ -65,6 +65,7 @@ export default function CurrentAffairsPage() {
   const [cat, setCat] = useState<CACategory | "all" | "saved">("all");
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
+  const [attemptedEntry, setAttemptedEntry] = useState(false);
   const [draft, setDraft] = useState<CurrentAffair>(emptyCA());
   const [tagInput, setTagInput] = useState("");
   /** The note being read in full. A card's summary is only a preview. */
@@ -99,6 +100,7 @@ export default function CurrentAffairsPage() {
     setDraft({ ...note });
     setTagInput(note.tags.join(", "));
     setReading(null);
+    setAttemptedEntry(false);
     setOpen(true);
   }
 
@@ -114,6 +116,7 @@ export default function CurrentAffairsPage() {
           <Button
             onClick={() => {
               setDraft(emptyCA());
+              setAttemptedEntry(false);
               setOpen(true);
             }}
           >
@@ -328,7 +331,7 @@ export default function CurrentAffairsPage() {
       <Modal
         open={open}
         onClose={() => setOpen(false)}
-        title={isEditing ? "Edit this note" : "Add to the vault"}
+        title={isEditing ? "Edit note" : "Add a current affairs note"}
         footer={
           <>
             <Button variant="ghost" onClick={() => setOpen(false)}>
@@ -337,7 +340,7 @@ export default function CurrentAffairsPage() {
             <Button
               onClick={() => {
                 if (!draft.title.trim()) {
-                  toast({ title: "Give the note a title", description: "A headline is enough, e.g. “RBI holds the repo rate”.", tone: "error" });
+                  setAttemptedEntry(true);
                   return;
                 }
                 const tags = tagInput
@@ -356,14 +359,14 @@ export default function CurrentAffairsPage() {
         }
       >
         <div className="space-y-4">
-          <Field label="Headline">
+          <Field label="Headline" error={attemptedEntry && !draft.title.trim() ? "Enter a headline so you can find this note later." : undefined}>
             <Input
               value={draft.title}
               onChange={(e) => setDraft({ ...draft, title: e.target.value })}
               placeholder="What happened?"
             />
           </Field>
-          <Field label="Summary">
+          <Field label="Summary" optional>
             <Textarea
               value={draft.summary}
               onChange={(e) => setDraft({ ...draft, summary: e.target.value })}
@@ -385,7 +388,7 @@ export default function CurrentAffairsPage() {
                 ))}
               </Select>
             </Field>
-            <Field label="Source">
+            <Field label="Source" optional>
               <Input
                 value={draft.source}
                 onChange={(e) => setDraft({ ...draft, source: e.target.value })}
@@ -393,7 +396,7 @@ export default function CurrentAffairsPage() {
               />
             </Field>
           </div>
-          <Field label="Tags" hint="comma separated">
+          <Field label="Tags" optional hint="Separate tags with commas.">
             <Input
               value={tagInput}
               onChange={(e) => setTagInput(e.target.value)}

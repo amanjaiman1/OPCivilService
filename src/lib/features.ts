@@ -20,7 +20,7 @@ export const FEATURES = {
   goals: { label: "Goals", routes: ["/goals"] },
   life: { label: "Life Dashboard", routes: ["/wellbeing"] },
   revision: { label: "Revision", routes: ["/revision"] },
-  dashboard: { label: "Command Center", routes: ["/dashboard"] },
+  dashboard: { label: "Home", routes: ["/dashboard"] },
   roadmap: { label: "Roadmap", routes: ["/roadmap"] },
   habits: { label: "My Habits", routes: ["/habits"] },
   coach: { label: "Study Coach", routes: ["/coach"] },

@@ -1,48 +1,41 @@
 # Daily Capture
 
-**Daily Journal** in the sidebar opens the journal at `/journal` with the
-Daily Capture form over it: a popup with four tabs for the day, saved together
-with **Save All Changes** (or Ctrl/⌘ + S). A full save closes the form;
-closing with unsaved edits asks first and keeps them as a draft. The journal's
-"Capture today" button opens the form again.
+**Daily Journal** opens the browsing experience at `/journal`. Switch between
+entries, topics and analysis, or open a saved day to edit it. Use **Add entry**
+on the desktop rail, the mobile **+**, or **Alt+N** to open **Daily Capture**
+over the current page. The shortcut leaves text fields and other dialogs
+alone. Contextual actions can open a section directly.
 
 | Tab | What it edits | Saved through |
 |---|---|---|
-| Day Update | the day's journal entry and weekly targets | `saveJournalEntry` or `completeWeeklyTargets` |
-| Life | the day's Life Dashboard readings (only the tracked fields) | `upsertLifeEntry` / `deleteLifeEntry` |
-| Goals | the account's own goals: a new total, milestones, status, a note, and "Worked on this" (links the journal day) | `logGoalProgress`, `toggleGoalMilestone`, `setGoalStatus`, `addGoalNote`, `setGoalJournalDates` |
-| Habit | manual check-ins; connected habits are shown as the Habit Engine reads them | `toggleHabit` |
+| Study | Journal entry, revision sessions and weekly targets | `saveJournalEntry` or `completeWeeklyTargets` |
+| Life | Tracked readings with optional notes and file links | `upsertLifeEntry` / `deleteLifeEntry` |
+| Goals | Readings, milestones, status, notes and optional journal links | Existing goal actions |
+| Habits | Manual check-ins and connected habit evidence | `toggleHabit` and the Habit Engine |
 
-The address keeps the day and tab: `/journal?date=2026-11-18&section=goals`.
-`/journal?new=1` opens today's Day Update. Behind the form is the journal
-itself (entries, topics, analysis; `components/journal/journal-list.tsx`);
-`/journal?tab=topics|analysis` and `/journal/history` show it without the form. The standalone Goals, My Habits and Life Dashboard pages are
-unchanged.
+Explicit links such as `/journal?new=1` and
+`/journal?date=2026-11-18&section=life` still work. Closing Capture clears the entry parameters and keeps unrelated journal
+views and anchors. Reloading an active entry link restores the draft. Normal journal
+navigation opens the journal on its own. The address of the current page stays
+the same when Capture is opened from a global button. Browser Back closes the
+workspace before leaving that page. Closing restores the opener’s focus.
 
 ## Layout
 
-The form opens on the day: a week strip (logged days have a green dot, days
-with unsaved edits an amber one, and the calendar button jumps anywhere) and
-four one-line tabs, each with its figure. Day Update leads with its two most
-important parts, **Study** and **Topics completed**, as large cards. Study
-shows the day's total against the daily target and the split by subject;
-rows work as in the entry dialog ("Add a subject" adds an empty row), with
-half-hour steps on each row. Revision, how the day felt, reflection, files
-and the more detailed lists follow. Every tab lays its sections out in one
-bordered sheet, divided by hairlines. The tabs are compact icon tiles in
-one bar of liquid glass, joined by links that take the colours of the
-sections they connect (green between finished ones), with light running
-along them; a tinted lens glides to the selected tab.
+Use the week strip or the date field to change days. The four tabs show
+the selected section and its status. The footer keeps **Save All Changes**
+within reach while the form scrolls. Study surfaces time, topics and weekly
+targets ahead of optional detail. Life groups movement, body readings,
+focus and sleep. Blank readings stay unrecorded and a typed zero is a value.
+Use **Choose fields** to change which measurements appear.
 
-On a phone the bottom bar is a single "+" button (`CaptureButton` in
-`components/layout/bottom-nav.tsx`) that opens Daily Capture; every other page
-is in the menu at the top left. Until today is logged the button has a soft,
-breathing halo; once it is, it carries a check. In the demo, /journal opens
-without the form so the guide can talk the visitor through it first.
+The **Entry guide** walks through the form and gives you a sample action
+that has no effect on your account. It uses the same guidance controls as
+the other entry pages.
 
 ## Weekly targets
 
-Day Update groups the unarchived weekly plans whose saved dates cover the
+Study groups the unarchived weekly plans whose saved dates cover the
 selected day. Dated work for that day appears first, followed by overdue
 work, undated weekly work and upcoming milestones within the plan. Overlapping
 weeks keep their own headings. Deferred and carried originals are excluded.

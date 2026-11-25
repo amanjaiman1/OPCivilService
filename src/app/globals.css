@@ -1882,47 +1882,6 @@ button:is(.rounded-md, .rounded-lg, .rounded-xl, .rounded-full).place-items-cent
     inset 0 0 0 1px rgb(var(--accent) / 0.22);
 }
 
-/* Light running along the links between Daily Capture's tabs, one tab to
-   the next. Still for anyone who asks for less motion. */
-@keyframes capture-flow {
-  from {
-    transform: translateX(-100%);
-  }
-  to {
-    transform: translateX(400%);
-  }
-}
-.capture-flow {
-  animation: capture-flow 2.8s cubic-bezier(0.45, 0, 0.25, 1) infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .capture-flow {
-    animation: none;
-    opacity: 0;
-  }
-}
-
-/* The phone's capture button breathes a halo until today is logged. */
-@keyframes capture-halo {
-  from {
-    transform: scale(1);
-    opacity: 0.6;
-  }
-  to {
-    transform: scale(1.38);
-    opacity: 0;
-  }
-}
-.capture-halo {
-  animation: capture-halo 2.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .capture-halo {
-    animation: none;
-    opacity: 0;
-  }
-}
-
 /* ── Fallbacks and Reduce transparency ─────────────────────────────── */
 
 /* No backdrop-filter support: translucent surfaces would show sharp content
@@ -2107,3 +2066,16 @@ button:is(.rounded-md, .rounded-lg, .rounded-xl, .rounded-full).place-items-cent
   }
 }
 
+
+@media (max-width: 1023px) {
+  html[data-mobile-capture] {
+    --bottom-nav-h: calc(3.5rem + max(0.875rem, env(safe-area-inset-bottom)));
+  }
+}
+
+/* Capture needs room for the mobile keyboard and its persistent save footer. */
+@media (max-width: 639px) {
+  .capture-dialog {
+    max-height: min(97dvh, calc(100dvh - env(safe-area-inset-top)));
+  }
+}

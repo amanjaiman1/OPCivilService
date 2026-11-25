@@ -209,7 +209,7 @@ function StudyCard({
       }
     >
       <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
-        <p className="tabular text-[2.1rem] font-semibold leading-none tracking-[-0.03em] text-paper">{formatHours(total)}</p>
+        <p className="tabular text-xl font-semibold leading-none tracking-[-0.03em] text-paper">{formatHours(total)}</p>
         <p className={cn("pb-1 text-[0.78rem]", total > 24 ? "font-semibold text-danger" : left <= 0 && target > 0 ? "font-semibold text-positive" : "text-paper/60")}>
           {total > 24
             ? "More than 24 hours. Check the rows below."
@@ -805,18 +805,18 @@ export function JournalFields({
     const topicCount = draft.completedTopics?.length ?? 0;
     const pad = "p-4 sm:p-6";
     return (
-      <div className="overflow-hidden rounded-3xl border border-line bg-paper/[0.015] shadow-soft">
+      <div className="overflow-hidden rounded-2xl border border-line bg-card">
         {/* What the day was mostly about, first and largest. */}
-        <div className="grid divide-y divide-line bg-gradient-to-b from-accent/[0.06] to-transparent xl:grid-cols-[minmax(0,1.08fr)_minmax(0,1fr)] xl:divide-x xl:divide-y-0">
+        <div className="grid divide-y divide-line xl:grid-cols-[minmax(0,1.08fr)_minmax(0,1fr)] xl:divide-x xl:divide-y-0">
           <StudyCard className={pad} draft={draft} patch={patch} subjects={subjects} target={profile.dailyHourTarget} />
           <HeroCard
             className={pad}
             icon={BookOpenCheck}
             title="Topics completed"
-            hint="Search your syllabus or type your own. Topics from today's subjects come first."
+            hint="Choose a subject, then find or add a topic."
             aside={
               <span className="text-right">
-                <span className="tabular block text-[2.1rem] font-semibold leading-none tracking-[-0.03em] text-paper">{topicCount}</span>
+                <span className="tabular block text-xl font-semibold leading-none tracking-[-0.03em] text-paper">{topicCount}</span>
                 <span className="text-[0.7rem] text-paper/55">{topicCount === 1 ? "topic" : "topics"}</span>
               </span>
             }
@@ -828,11 +828,6 @@ export function JournalFields({
               journal={journal}
               prefer={studiedSubjects}
             />
-            {topicCount === 0 && (
-              <p className="rounded-xl border border-dashed border-paper/15 px-3.5 py-3 text-[0.76rem] leading-relaxed text-paper/55">
-                Nothing marked yet. Choose a subject to update Subject Progress and schedule revision.
-              </p>
-            )}
             {newSyllabusTopics > 0 && (
               <label className="flex cursor-pointer items-start gap-2.5 rounded-xl bg-accent/[0.07] px-3.5 py-3 text-xs text-paper/75">
                 <input

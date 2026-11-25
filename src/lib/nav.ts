@@ -42,10 +42,10 @@ export interface NavGroup {
 
 /**
  * The four sections used every day. They lead the sidebar as tiles and make
- * up the bottom bar on a phone; they appear nowhere else in the navigation.
+ * up the frequently used destinations in the sidebar.
  */
 export const essentialNavItems: NavItem[] = [
-  { label: "Daily Journal", href: "/journal", icon: NotebookPen, short: "Log today", tab: "Journal" },
+  { label: "Daily Journal", href: "/journal", icon: NotebookPen, short: "Browse daily records, topics and analysis", tab: "Journal" },
   { label: "Goals", href: "/goals", icon: Target, short: "What you're chasing", tab: "Goals" },
   {
     label: "Life Dashboard",
@@ -60,42 +60,36 @@ export const essentialNavItems: NavItem[] = [
 export const navGroups: NavGroup[] = [
   { label: "Essentials", items: essentialNavItems, prominent: true },
   {
-    label: "Command",
+    label: "Home and planning",
     items: [
-      { label: "Command Center", href: "/dashboard", icon: LayoutDashboard, short: "Dashboard overview" },
-      { label: "Roadmap", href: "/roadmap", icon: Route, short: "Your yearly, monthly and weekly plans" },
-      { label: "My Habits", href: "/habits", icon: ListChecks, short: "Habits that fill in from your records" },
-      { label: "Study Coach", href: "/coach", icon: Sparkles, short: "Today's briefing, evidence & plan changes" },
+      { label: "Home", href: "/dashboard", icon: LayoutDashboard, short: "Daily priorities and overview" },
+      { label: "Roadmap", href: "/roadmap", icon: Route, short: "Yearly, monthly and weekly plans" },
+      { label: "Study Coach", href: "/coach", icon: Sparkles, short: "Briefing and suggestions" },
     ],
   },
   {
-    label: "Daily Engine",
+    label: "Study tools",
     items: [
+      { label: "Subject Progress", href: "/subjects", icon: Layers, short: "Syllabus mastery" },
       { label: "Current Affairs", href: "/current-affairs", icon: Newspaper, short: "News vault" },
       { label: "Mistake Tracker", href: "/mistakes", icon: TriangleAlert, short: "Learn from errors" },
       { label: "Library", href: "/books", icon: BookOpen, short: "Book progress" },
-    ],
-  },
-  {
-    label: "Analytics",
-    items: [
-      { label: "Study Heatmap", href: "/heatmap", icon: Flame, short: "Consistency map" },
-      { label: "Subject Progress", href: "/subjects", icon: Layers, short: "Syllabus mastery" },
-      { label: "Mock Analytics", href: "/mocks", icon: BarChart3, short: "Test performance" },
       { label: "Knowledge Graph", href: "/knowledge-graph", icon: Network, short: "Connected concepts" },
     ],
   },
   {
-    label: "Review & Personal Diary",
+    label: "Habits and personal",
     items: [
-      {
-        label: "Performance Review",
-        href: "/performance-review",
-        icon: CalendarCheck,
-        short: "Weekly, monthly or any period, gathered from your records",
-        tab: "Review",
-      },
-      { label: "Personal Diary", href: "/diary", icon: BookLock, short: "Private writing, only for you", tab: "Diary" },
+      { label: "My Habits", href: "/habits", icon: ListChecks, short: "Track your habits" },
+      { label: "Personal Diary", href: "/diary", icon: BookLock, short: "Private writing" },
+    ],
+  },
+  {
+    label: "Analytics and reviews",
+    items: [
+      { label: "Study Heatmap", href: "/heatmap", icon: Flame, short: "Consistency map" },
+      { label: "Mock Analytics", href: "/mocks", icon: BarChart3, short: "Test performance" },
+      { label: "Performance Review", href: "/performance-review", icon: CalendarCheck, short: "Review a study period" },
     ],
   },
   {

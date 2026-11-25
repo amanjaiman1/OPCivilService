@@ -20,6 +20,7 @@
  */
 
 import { spawn, execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,7 +30,8 @@ import { buildDataset } from "./dataset.ts";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const APP = "http://localhost:3100";
 const MOCK = "http://localhost:54321";
-const PASSWORD = "studyHard2027";
+// Each run creates its own accounts in the local mock Supabase.
+const PASSWORD = randomUUID();
 
 const arg = (name, fallback) => {
   const i = process.argv.indexOf(`--${name}`);
@@ -78,9 +80,8 @@ const SLOW_DATA = Number(arg("slow-data", "0"));
 const P = PROFILES[PROFILE];
 if (!P) throw new Error(`Unknown profile ${PROFILE}`);
 
-/** The dock's four pages, then pages opened from the menu. */
-const DOCK = ["/journal", "/goals", "/wellbeing", "/revision"];
-const MENU = ["/habits", "/coach", "/roadmap", "/diary", "/performance-review", "/mocks", "/subjects", "/settings", "/dashboard"];
+/** Pages reached from the sidebar or mobile menu. */
+const DESTINATIONS = ["/journal", "/goals", "/wellbeing", "/revision", "/habits", "/coach", "/roadmap", "/diary", "/performance-review", "/mocks", "/subjects", "/settings", "/dashboard"];
 
 /* ── processes ─────────────────────────────────────────────────── */
 
@@ -154,15 +155,11 @@ const RECORDER = `(() => {
 
 /* ── a tap ─────────────────────────────────────────────────────── */
 
-async function open(page, path, fromMenu) {
-  if (fromMenu && P.isMobile) {
-    await page.locator('nav[aria-label="Quick access"] button', { hasText: "More" }).click();
-    await page.locator(`aside a[href="${path}"]`).first().waitFor({ state: "visible" });
-    await page.waitForTimeout(400); // the drawer's slide
-  }
-  const link = P.isMobile && !fromMenu
-    ? page.locator(`nav[aria-label="Quick access"] a[href="${path}"]`).first()
-    : page.locator(`aside a[href="${path}"]`).first();
+async function open(page, path) {
+  if (P.isMobile) await page.getByRole("button", { name: "Open menu", exact: true }).click();
+  const link = page.locator(`aside a[href="${path}"]`).first();
+  await link.waitFor({ state: "visible" });
+  if (P.isMobile) await page.waitForTimeout(400); // the drawer's slide
   return tap(page, link, path);
 }
 
@@ -215,13 +212,13 @@ function print(name, rows) {
 
 async function pass(page, name) {
   const rows = [];
-  for (const path of DOCK) rows.push(await open(page, path, false));
-  for (const path of MENU) rows.push(await open(page, path, true));
+
+  for (const path of DESTINATIONS) rows.push(await open(page, path));
   return print(name, rows);
 }
 
 /**
- * Links inside a page (the Command Center's "Journal" button and the like)
+ * Links inside a page (the Home's "Journal" button and the like)
  * are Next's own <Link>, which prefetches what's on screen. Tapped after the
  * page has been open a while, as people do.
  */
@@ -232,7 +229,7 @@ const IN_PAGE = [
 async function inPagePass(page, waitMs) {
   const rows = [];
   for (const [path, selector] of IN_PAGE) {
-    await open(page, "/dashboard", true);
+    await open(page, "/dashboard");
     const link = page.locator(selector).first();
     if (!(await link.count())) {
       rows.push({ path, missing: selector });
@@ -252,7 +249,7 @@ async function main() {
     console.log("Building the app against it…");
     execFileSync("npx", ["next", "build"], { cwd: root, env, stdio: "ignore" });
   }
-  await start("npx", ["next", "start", "-p", "3100"], "Ready");
+  await start(process.execPath, ["node_modules/next/dist/bin/next", "start", "-p", "3100"], "Ready");
   const browser = await chromium.launch();
   const results = {
     label: LABEL,

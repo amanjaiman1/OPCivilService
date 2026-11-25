@@ -167,6 +167,7 @@ export function LifeFields({
           onWakeTime={(v) => setTime("wakeTime", v)}
           format={format}
           target={profile.sleepTarget}
+          compact={page}
         />
         <FieldError>{touched ? errors.sleepTimes : undefined}</FieldError>
         <div className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2">
@@ -240,9 +241,9 @@ export function LifeFields({
 
   const tracking = (
     <div className={cn("flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line px-3.5 py-2.5", page ? "bg-paper/[0.03]" : "bg-paper/[0.02]")}>
-      <p className="min-w-0 flex-1 text-[0.75rem] text-paper/65">You track {trackedNames.length ? trackedNames.join(", ") : "nothing yet"}.</p>
+      <p className="min-w-0 flex-1 text-[0.75rem] text-paper/65">{page ? "Tracked fields" : `You track ${trackedNames.length ? trackedNames.join(", ") : "nothing yet"}.`}</p>
       <button type="button" onClick={onChooseFields} className="inline-flex items-center gap-1.5 text-[0.75rem] font-semibold text-accent hover:underline">
-        <SlidersHorizontal className="h-3.5 w-3.5" /> Change
+        <SlidersHorizontal className="h-3.5 w-3.5" /> Choose fields
       </button>
     </div>
   );
@@ -272,19 +273,19 @@ export function LifeFields({
     return (
       <div className="space-y-5" data-testid="life-form">
         {tracking}
-        <div className="divide-y divide-line overflow-hidden rounded-3xl border border-line bg-paper/[0.015] shadow-soft">
-          {groups.map((g) => (
-            <div key={g.title} className="p-4 sm:p-6">
+        <div className="grid items-start gap-3 lg:grid-cols-2">
+          {[...groups.filter((g) => g.title !== "Sleep"), ...groups.filter((g) => g.title === "Sleep")].map((g) => (
+            <div key={g.title} className="min-w-0 rounded-2xl border border-line bg-paper/[0.02] p-4">
               <Group icon={g.icon} title={g.title}>
                 {groupBody(g)}
               </Group>
             </div>
           ))}
-          <div className="space-y-6 p-4 sm:p-6">
-            {note}
-            {files}
-          </div>
         </div>
+        <details className="rounded-xl border border-line px-4 py-3">
+          <summary className="cursor-pointer text-sm font-semibold text-paper">Notes and files</summary>
+          <div className="mt-4 space-y-4">{note}{files}</div>
+        </details>
       </div>
     );
   }
