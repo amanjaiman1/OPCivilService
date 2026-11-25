@@ -45,7 +45,7 @@ function SleepRailAction() {
       const account = getActiveAccountId();
       if (!date || !(await confirm({
         title: waking ? "Record wake-up time?" : "Record bedtime?",
-        description: `Save ${formatClock(action.nowClock, format)} for the night of ${nightLabel(date)}.`,
+        description: `Save ${formatClock(waking ? action.wakeClock : action.nowClock, format)} for the night of ${nightLabel(date)}.`,
         confirmLabel: waking ? "Record wake-up" : "Record bedtime",
         tone: "default",
         icon: Icon,

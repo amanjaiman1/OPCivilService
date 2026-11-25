@@ -529,8 +529,11 @@ export interface LifeEntry {
   id: string;
   date: ISODate; // unique per day
   sleepHours?: number;
+  sleepHoursSource?: "reported" | "estimated";
   sleepQuality?: number; // 1-5
   bedtime?: string;
+  /** IANA zone where the recorded wall-clock times occurred. */
+  sleepTimezone?: string;
   wakeTime?: string;
   walkKm?: number;
   runKm?: number;

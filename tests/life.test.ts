@@ -214,3 +214,22 @@ test("saving a life day keeps its linked files and readings the form didn't show
   const onlyFiles = entryFromDraft(draftFromEntry(TODAY), TODAY, { id: "l", date: TODAY, fileIds: ["f2"] });
   assert.deepEqual(onlyFiles.entry?.fileIds, ["f2"], "a day holding only links is still kept");
 });
+
+test("wellbeing comparison needs three readings in each period and keeps recorded zero", () => {
+  const r = buildLifeReport({
+    journal: [],
+    lifeLog: [
+      { id: "water-1", date: "2026-11-09", waterLiters: 0 },
+      { id: "water-2", date: "2026-11-10", waterLiters: 2 },
+      { id: "water-3", date: "2026-11-11", waterLiters: 1 },
+      { id: "prior", date: "2026-11-07", waterLiters: 3 },
+    ],
+    span: { from: "2026-11-09", to: "2026-11-15" },
+    tracked: ["water"],
+  });
+  const water = r.metrics.find((m) => m.id === "water");
+  assert.equal(water?.value, 1);
+  assert.equal(water?.recorded, 3);
+  assert.equal(water?.previous, null);
+  assert.equal(water?.change, null);
+});

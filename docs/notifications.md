@@ -1,13 +1,9 @@
 # Intelligent notifications
 
-Nothing in the Chronicle nags you on a timer. Every notification is *derived* —
-a pure function reads the same data the pages read and returns the set of things
-that are true right now. There is no notification table, no scheduler, no
-server job. Delete your read-state and the exact same list comes back, because
-the list was never stored in the first place.
-
-That one decision is what makes the system honest: a notification cannot drift
-out of sync with reality, because it *is* reality, recomputed.
+DoOrDie derives in-app notices from the same records its pages read. The
+notification centre stores read and dismissal state separately. The scheduled
+dispatcher evaluates eligible web push against the synced snapshot, preferences,
+and delivery history.
 
 ## The five layers
 
@@ -561,3 +557,26 @@ Edge work once installed.
   reads as "unread again", not as a crash. Treat an id format as an API.
 - Nothing here writes to your data. A notification can suggest logging a
   revision; only you can log it.
+
+### Sleeping now
+
+When browser delivery is enabled, the scheduler can send a bedtime reminder
+between 21:00 and midnight in the saved profile zone, or the selected
+subscription zone when the profile has none. It respects the Life category
+and Bedtime reminder switches, quiet hours, the daily cap, and the delivery
+gap. The bedtime reminder is an individual notification even in digest mode.
+A critical ordinary notification takes precedence. The 15-minute GitHub
+schedule is best effort, and the once-daily Vercel fallback only sends bedtime
+if its run lands in the eligible window.
+
+Action buttons are used only when the service worker detects that the browser
+supports them. **Sleeping now** uses the device's current subscription and a
+scoped capability to request a single bedtime save. A body click, a browser
+with no action buttons, or a failed request opens the Life Dashboard for
+manual confirmation. **Later** dismisses the notification. This flow does not
+queue background writes offline. No success is shown for an unconfirmed save.
+
+Credentials expire at most seven elapsed hours after dispatch and are only usable
+until 04:00 local time for the same night. The database uses the request receipt
+time and verifies that the subscription still belongs to the same account.
+See the [Phase 03 report](transformation/PHASE_03_REPORT.md) for platform verification.

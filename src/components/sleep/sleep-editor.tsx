@@ -8,6 +8,7 @@ import { useNow } from "@/lib/hooks";
 import {
   MAX_SLEEP_HOURS,
   bedDateFor,
+  bedtimeNowNight,
   checkSleep,
   clockDelta,
   clockMinutes,
@@ -25,6 +26,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/form";
 import { useConfirm } from "@/components/ui/confirm-dialog";
+import { zonedNow } from "@/lib/zoned-time";
 import { cn, fromISODate, toISODate } from "@/lib/utils";
 import { TimeField, type TimeChip } from "./time-field";
 
@@ -44,10 +46,10 @@ function bedDay(date: ISODate, bedtime: string, wakeTime: string): ISODate {
 
 /** How the night compares with the target, in plain words. */
 function targetNote(check: SleepCheck, bedtime: string, target: SleepTarget | undefined, format: TimeFormat): string | null {
-  if (!target || !check.ok) return null;
+  if (!target) return null;
   const parts: string[] = [];
   const aim = targetMinutes(target);
-  if (aim != null) {
+  if (aim != null && check.ok) {
     const diff = check.minutes - aim;
     if (Math.abs(diff) <= 10) parts.push(`right on your ${formatDuration(aim)} aim`);
     else parts.push(`${formatDuration(Math.abs(diff))} ${diff < 0 ? "short of" : "over"} your ${formatDuration(aim)} aim`);
@@ -75,6 +77,8 @@ export function SleepTimes({
   wakeChips,
   target,
   compact = false,
+  morning = false,
+  timezone,
 }: {
   date: ISODate;
   bedtime: string;
@@ -86,8 +90,10 @@ export function SleepTimes({
   wakeChips?: TimeChip[];
   target?: SleepTarget;
   compact?: boolean;
+  morning?: boolean;
+  timezone?: string;
 }) {
-  const check = checkSleep(date, bedtime, wakeTime);
+  const check = checkSleep(date, bedtime, wakeTime, timezone);
   const note = targetNote(check, bedtime, target, format);
   const night = nightLabel(date);
 
@@ -95,7 +101,7 @@ export function SleepTimes({
     <div className={compact ? "space-y-2" : "space-y-4"}>
       <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-2 sm:gap-3">
         <TimeField
-          label="Went to bed"
+          label={morning ? "Last night · Went to bed" : "Went to bed"}
           icon={Moon}
           context="bed"
           size={compact ? "md" : undefined}
@@ -108,7 +114,7 @@ export function SleepTimes({
         />
         <ArrowRight className={cn("h-4 w-4 shrink-0 text-paper/45", compact ? "mt-8" : "mt-11")} aria-hidden />
         <TimeField
-          label="Woke up"
+          label={morning ? "Today morning · Woke up" : "Woke up"}
           icon={Sunrise}
           context="wake"
           size={compact ? "md" : undefined}
@@ -138,8 +144,7 @@ export function SleepTimes({
         {check.ok ? (
           <>
             <p className="text-sm text-paper/75">
-              <span className="tabular font-display text-xl font-bold tracking-tightest text-paper">{formatDuration(check.minutes)}</span> of
-              sleep
+              <span className="tabular font-display text-xl font-bold tracking-tightest text-paper">{formatDuration(check.minutes)}</span> in bed
             </p>
             {check.message && (
               <p className="mt-0.5 flex items-center gap-1 text-[0.72rem] text-warning">
@@ -153,7 +158,7 @@ export function SleepTimes({
             {bedtime && !wakeTime
               ? `In bed from ${formatClock(bedtime, format)}. Add the wake-up when you're up.`
               : wakeTime && !bedtime
-                ? "Add your bedtime to see how long you slept."
+                ? "Add your bedtime to calculate time in bed."
                 : check.message}
           </p>
         ) : (
@@ -162,6 +167,7 @@ export function SleepTimes({
           </p>
         )}
       </div>}
+      {!check.ok && note && <p className="text-xs text-paper/65">{note}</p>}
     </div>
   );
 }
@@ -243,18 +249,22 @@ export function SleepEditor({
   const format = timeFormatOf(profile);
   const night = entry ? nightOf(entry) : null;
   const asleepId = useId();
+  const timezone = entry?.sleepTimezone;
 
-  const initial: Form = useMemo(
-    () => ({
+  const initial: Form = useMemo(() => {
+    const current = new Date();
+    const nightClock = zonedNow(timezone, current);
+    const suggestedWake = variant === "gate" && date === today && toISODate(nightClock) === date &&
+      current.getHours() < 15 ? clockNow(nightClock) : "";
+    return {
       bedtime: night?.bedtime ?? "",
-      wakeTime: night?.wakeTime ?? "",
+      wakeTime: night?.wakeTime ?? suggestedWake,
       quality: night?.quality,
       asleep: night && night.hours != null && (night.manualHours || night.timesMinutes == null) ? String(night.hours) : "",
-    }),
-    // A night's identity is its saved values.
+    };
+    // The fields are keyed to the saved values. The suggestion stays fixed as the user edits.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [night?.bedtime, night?.wakeTime, night?.quality, night?.hours, night?.manualHours, night?.timesMinutes],
-  );
+  }, [date, today, timezone, variant, night?.bedtime, night?.wakeTime, night?.quality, night?.hours, night?.manualHours, night?.timesMinutes]);
   const [form, setForm] = useState<Form>(initial);
   const [more, setMore] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -268,14 +278,14 @@ export function SleepEditor({
   useEffect(() => {
     setForm(initial);
     setError(null);
-    setMore(Boolean(initial.quality != null || initial.asleep));
+    setMore(initial.quality != null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
   useEffect(() => {
     if (!dirtyRef.current) setForm(initial);
   }, [initial]);
 
-  const check = checkSleep(date, form.bedtime, form.wakeTime);
+  const check = checkSleep(date, form.bedtime, form.wakeTime, timezone);
   const isTonight = date > today;
   const nowClock = clockNow(now);
   const usualBed = usualClock(lifeLog, "bedtime", date);
@@ -286,7 +296,7 @@ export function SleepEditor({
   ];
   const wakeChips: TimeChip[] = [
     // "Now" is a wake-up only during waking hours; at 8 PM it isn't last night's.
-    ...(date === today && now.getHours() >= 3 && now.getHours() < 15 ? [{ label: "Now", value: nowClock }] : []),
+    ...(date === today && now.getHours() >= 3 && now.getHours() < 15 && toISODate(zonedNow(timezone, now)) === date ? [{ label: "Now", value: clockNow(zonedNow(timezone, now)) }] : []),
     ...(usualWake ? [{ label: "Usual", value: usualWake }] : []),
   ];
 
@@ -314,6 +324,10 @@ export function SleepEditor({
         return;
       }
     }
+    if (asleep != null && check.ok && Math.round(asleep * 60) > check.minutes && (form.asleep !== initial.asleep || form.bedtime !== initial.bedtime || form.wakeTime !== initial.wakeTime)) {
+      setError("Actual sleep cannot exceed time in bed.");
+      return;
+    }
     if (!form.bedtime && !form.wakeTime && asleep == null && form.quality == null) {
       setError(night ? "Nothing left to save. Use Delete to remove this night." : "Set a bedtime or a wake-up first.");
       return;
@@ -325,6 +339,7 @@ export function SleepEditor({
       // Hours typed by hand win; otherwise they follow the times. Clearing a
       // typed value on a night without both times clears the hours too.
       hours: asleep ?? (both ? undefined : initial.asleep ? null : undefined),
+      deriveHours: both && asleep == null,
       quality: form.quality ?? null,
       promptKey: variant === "gate" ? promptKey : undefined,
     });
@@ -357,43 +372,46 @@ export function SleepEditor({
         bedChips={bedChips}
         wakeChips={wakeChips}
         target={profile.sleepTarget}
+        morning={variant === "gate"}
+        timezone={timezone}
       />
+      {timezone && timezone !== Intl.DateTimeFormat().resolvedOptions().timeZone && (
+        <p className="text-xs text-paper/65">Times for this night are shown in {timezone}.</p>
+      )}
 
-      <div className="rounded-2xl border border-line">
-        <button
-          type="button"
-          onClick={() => setMore((m) => !m)}
-          aria-expanded={more}
-          className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left"
-        >
-          <span className="text-[0.75rem] font-semibold text-paper/70">
-            More details
-            <span className="font-normal text-paper/50"> · quality, time asleep</span>
-          </span>
-          <ChevronDown className={cn("h-4 w-4 shrink-0 text-paper/45 transition-transform", more && "rotate-180")} />
-        </button>
-        {more && (
-          <div className="grid gap-4 border-t border-line px-4 py-4 sm:grid-cols-2">
-            <QualityPicker value={form.quality} onChange={(quality) => patch({ quality })} />
-            <div>
-              <label htmlFor={asleepId} className="mb-2 block text-[0.75rem] font-semibold text-paper/65">
-                Time asleep, if different (hours)
-              </label>
-              <Input
-                id={asleepId}
-                type="number"
-                inputMode="decimal"
-                min={0.25}
-                max={MAX_SLEEP_HOURS}
-                step={0.25}
-                value={form.asleep}
-                onChange={(e) => patch({ asleep: e.target.value })}
-                placeholder={check.ok ? `${(check.minutes / 60).toFixed(2).replace(/\.?0+$/, "")} from the times` : "e.g. 6.5"}
-              />
-              <p className="mt-1 text-[0.7rem] text-paper/50">Leave it empty to count bedtime to wake-up.</p>
-            </div>
+      <div className="space-y-3 rounded-2xl border border-accent/25 bg-accent/[0.06] px-4 py-3">
+        <div>
+          <h3 className="text-sm font-semibold text-paper">Did you fall asleep later?</h3>
+          <p className="mt-1 text-xs text-paper/65">Enter actual time asleep if you were awake for part of the night.</p>
+        </div>
+        <label htmlFor={asleepId} className="block text-xs font-semibold text-paper/70">Actual time asleep (hours)</label>
+        <Input id={asleepId} type="number" inputMode="decimal" min={0.25} max={MAX_SLEEP_HOURS} step="any"
+          value={form.asleep} onChange={(e) => patch({ asleep: e.target.value })}
+          placeholder={check.ok ? "Optional correction" : "e.g. 6.5"} />
+        {check.ok && (
+          <div className="flex flex-wrap gap-2">
+            {[15, 30, 60].filter((minutes) => check.minutes - minutes >= 15).map((minutes) => (
+              <Button key={minutes} variant="outline" size="sm"
+                onClick={() => patch({ asleep: String(Math.round((check.minutes - minutes) * 100 / 60) / 100) })}>
+                {minutes} min awake
+              </Button>
+            ))}
           </div>
         )}
+        <p className="text-xs text-paper/65">
+          {check.ok && form.asleep && Number(form.asleep) >= 0.25 && Math.round(Number(form.asleep) * 60) <= check.minutes
+            ? `${formatDuration(check.minutes - Math.round(Number(form.asleep) * 60))} awake · ${formatDuration(Math.round(Number(form.asleep) * 60))} asleep`
+            : "Leave blank to use time in bed as an estimate when both times are recorded."}
+        </p>
+      </div>
+
+      <div className="rounded-2xl border border-line">
+        <button type="button" onClick={() => setMore((m) => !m)} aria-expanded={more}
+          className="flex min-h-11 w-full items-center justify-between gap-3 px-4 text-left text-xs font-semibold text-paper/70">
+          Sleep quality <span className="font-normal text-paper/55">Optional</span>
+          <ChevronDown className={cn("ml-auto h-4 w-4 text-paper/45", more && "rotate-180")} />
+        </button>
+        {more && <div className="border-t border-line p-4"><QualityPicker value={form.quality} onChange={(quality) => patch({ quality })} /></div>}
       </div>
 
       {error && (
@@ -445,30 +463,28 @@ export function useSleepQuickActions() {
   const today = toISODate(now);
   const nowClock = clockNow(now);
 
-  const evening = now.getHours() >= 18 || now.getHours() < 4;
-  const tonightDate = (() => {
-    if (!evening) return null;
-    const d = new Date(now);
-    if (now.getHours() >= 18) d.setDate(d.getDate() + 1);
-    return toISODate(d);
-  })();
+  const tonightDate = bedtimeNowNight(now);
   const tonight = tonightDate ? lifeLog.find((l) => l.date === tonightDate) : undefined;
   const lastNight = lifeLog.find((l) => l.date === today);
+  const wakeNow = zonedNow(lastNight?.sleepTimezone, now);
+  const wakeClock = clockNow(wakeNow);
 
   return {
     nowClock,
+    wakeClock,
     today,
     tonightDate,
     /** Evening, and tonight's bedtime isn't recorded yet. */
-    canBedNow: Boolean(tonightDate && !tonight?.bedtime),
+    canBedNow: Boolean(tonightDate && !tonight?.bedtime && !tonight?.wakeTime),
     /**
      * A bedtime is waiting for the night ending today, and it's a time people
      * wake up (3 AM to 3 PM, which covers a night shift's sleep). At 8 PM
      * "woke up now" would be wrong, so the times are picked instead.
      */
-    canWakeNow: Boolean(lastNight?.bedtime && !lastNight.wakeTime && now.getHours() >= 3 && now.getHours() < 15),
+    canWakeNow: Boolean(lastNight?.bedtime && !lastNight.wakeTime && now.getHours() >= 3 && now.getHours() < 15 &&
+      toISODate(wakeNow) === today && checkSleep(today, lastNight.bedtime, wakeClock, lastNight.sleepTimezone).ok),
     morning: now.getHours() >= 3 && now.getHours() < 12,
     bedNow: () => tonightDate && recordSleep({ date: tonightDate, bedtime: nowClock }),
-    wakeNow: (promptKey?: string) => recordSleep({ date: today, wakeTime: nowClock, promptKey }),
+    wakeNow: (promptKey?: string) => recordSleep({ date: today, wakeTime: wakeClock, promptKey }),
   };
 }

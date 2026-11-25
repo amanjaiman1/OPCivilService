@@ -166,3 +166,12 @@ refresh it too if those move — see `docs/design-system.md`.
 - With cloud sync enabled, an expired Supabase session cannot be refreshed
   offline, so a cold offline launch after the token expires shows the sign-in
   screen. Local-only builds (no Supabase env vars) are unaffected.
+
+### Bedtime action fallback
+
+A worker that supports notification actions offers Sleeping now for an
+eligible bedtime reminder. On an unsupported client or a failed request,
+the notification opens the Life Dashboard for manual confirmation. The
+worker does not cache credentials in the app's data store or queue an
+offline mutation. Browser and OS delivery still require verified Web Push
+support and permissions.

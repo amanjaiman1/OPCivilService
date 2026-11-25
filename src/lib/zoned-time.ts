@@ -4,6 +4,9 @@
    server in UTC but has to make decisions in the user's local day.
    ════════════════════════════════════════════════════════════════ */
 
+const validity = new Map<string, boolean>();
+const wallFormatters = new Map<string, Intl.DateTimeFormat>();
+
 /**
  * Whether the runtime recognises `tz` as an IANA zone.
  *
@@ -13,12 +16,18 @@
  */
 export function isValidTimeZone(tz: string | null | undefined): boolean {
   if (!tz) return false;
+  const known = validity.get(tz);
+  if (known !== undefined) return known;
+  let valid = false;
   try {
     new Intl.DateTimeFormat("en-CA", { timeZone: tz });
-    return true;
+    valid = true;
   } catch {
-    return false;
+    // Submitted time-zone names may be invalid.
   }
+  if (validity.size >= 1024) validity.clear();
+  validity.set(tz, valid);
+  return valid;
 }
 
 /**
@@ -103,4 +112,32 @@ export function pickTimeZone(zones: (string | null | undefined)[]): string | nul
   return [...counts.entries()].sort(
     (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
   )[0][0];
+}
+
+
+/** Resolve a wall-clock reading in its original IANA zone. On a repeated hour,
+ * choose the first occurrence. A skipped, nonexistent clock time is invalid. */
+export function instantForWallTime(date: string, clock: string, zone: string): number | null {
+  const wall = Date.parse(`${date}T${clock}:00Z`);
+  if (!Number.isFinite(wall) || !isValidTimeZone(zone)) return null;
+  const candidates = new Set<number>();
+  let formatter = wallFormatters.get(zone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+    });
+    if (wallFormatters.size >= 1024) wallFormatters.clear();
+    wallFormatters.set(zone, formatter);
+  }
+  const format = formatter;
+  const wallMs = (instant: number) => {
+    const values = new Map(format.formatToParts(instant).map(({ type, value }) => [type, Number(value)]));
+    return Date.UTC(values.get("year")!, values.get("month")! - 1, values.get("day")!, values.get("hour")!, values.get("minute")!);
+  };
+  for (const sample of [wall - 86_400_000, wall, wall + 86_400_000]) {
+    const candidate = wall - (wallMs(sample) - sample);
+    if (wallMs(candidate) === wall) candidates.add(candidate);
+  }
+  return candidates.size > 0 ? Math.min(...candidates) : null;
 }

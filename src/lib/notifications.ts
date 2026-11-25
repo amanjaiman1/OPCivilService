@@ -47,6 +47,7 @@ export type RuleId =
   | "subject-stale-topics"
   | "book-stalled"
   | "ca-gap"
+  | "bedtime-reminder"
   | "sleep-debt"
   | "exam-countdown";
 
@@ -200,6 +201,12 @@ export const RULES: RuleMeta[] = [
     category: "study",
     label: "Current affairs gap",
     description: "Nothing added to the vault for three days.",
+  },
+  {
+    id: "bedtime-reminder",
+    category: "life",
+    label: "Bedtime reminder",
+    description: "A bedtime shortcut after 9 PM, outside quiet hours.",
   },
   {
     id: "sleep-debt",
@@ -724,7 +731,7 @@ export function evaluate(
         category: "life",
         priority: "normal",
         title: `Averaging ${Math.round(avgSleep * 10) / 10}h of sleep`,
-        body: `Across ${plural(recentSleep.length, "night")}. Retention is the first thing sleep debt takes.`,
+        body: `Across ${plural(recentSleep.length, "night")}. Review your recorded nights on the Life Dashboard.`,
         href: "/wellbeing",
         cta: "Open wellbeing",
         dedupeKey: "sleep-debt",

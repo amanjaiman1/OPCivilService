@@ -188,18 +188,19 @@ self.addEventListener("push", (event) => {
     badge: "/icons/icon-192.png?v=2",
     // The href travels in `data` so `notificationclick` can route without
     // re-parsing the body.
-    data: { href },
+    data: { href, bedtimeToken: payload.bedtimeToken, bedtimeEndpointHash: payload.bedtimeEndpointHash },
   };
 
-  // Android renders these as buttons. Each needs a string `action` and `title`,
-  // and the platform caps how many it will show — two is safely within it.
+  // Sleep actions are opt-in at runtime: if the browser cannot render an
+  // action, the body click links to the sleep card for manual confirmation.
   if (Array.isArray(payload.actions)) {
+    const limit = payload.bedtimeToken ? Math.min(2, Number(self.Notification?.maxActions) || 0) : 2;
     const actions = payload.actions
       .filter(
         (a) =>
           a && typeof a.action === "string" && typeof a.title === "string",
       )
-      .slice(0, 2)
+      .slice(0, limit)
       .map((a) => ({ action: a.action, title: a.title }));
     if (actions.length) options.actions = actions;
   }
@@ -337,6 +338,30 @@ self.addEventListener("notificationclick", (event) => {
 
   event.waitUntil(
     (async () => {
+      if (event.action === "sleep-now") {
+        const token = event.notification.data?.bedtimeToken;
+        if (typeof token === "string" && /^[a-f0-9]{64}$/.test(token)) {
+          try {
+            const subscription = await self.registration.pushManager.getSubscription();
+            if (!subscription) throw new Error("Push subscription has ended");
+            const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(subscription.endpoint));
+            const endpointHash = Array.from(new Uint8Array(hash), (n) => n.toString(16).padStart(2, "0")).join("");
+            if (endpointHash !== event.notification.data?.bedtimeEndpointHash) throw new Error("Push subscription changed");
+            const response = await fetch("/api/push/bedtime", {
+              method: "POST",
+              credentials: "omit",
+              signal: AbortSignal.timeout(8000),
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (response.ok) {
+              const result = await response.json();
+              if (result.status === "recorded" || result.status === "already_recorded") return;
+            }
+          } catch {
+            // Fall through to manual confirmation, with no offline write queued.
+          }
+        }
+      }
       const clientList = await self.clients.matchAll({
         type: "window",
         includeUncontrolled: true,

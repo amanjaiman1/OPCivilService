@@ -282,3 +282,15 @@ select id, created_at, version, reason, counts from public.chronicle_state_histo
 Deploying the app before the migration is safe but degraded: saves report
 "Cloud sync needs a database update", stamped devices keep working on the
 device, and fresh browsers wait on the can't-verify screen.
+
+### Bedtime from Web Push
+
+The background bedtime action is the one server-originated field update for
+sleep. A private credential row binds the action to an account, subscription,
+night and zone. The database locks the subscription and credential, then the
+existing account snapshot, before checking and updating it. It writes no
+wake-up time or duration, preserves other Life and Journal fields, creates
+a sync checkpoint, and uses the existing version and live-update triggers.
+A concurrent older client save sees a version conflict. The existing three-way
+merge reconciles other fields. A server notification cannot overwrite a
+manually recorded bedtime. Subscription deletion and expiry revoke the action.
