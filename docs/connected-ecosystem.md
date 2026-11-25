@@ -17,7 +17,7 @@ a deletion anywhere is reflected everywhere the next time the screen draws.
 | Performance Review (`/performance-review`) | What you wrote about a period, and the figures it was completed with | Journal, Roadmap, goals, revision, habits, life, mocks | Read the diary |
 | Personal Diary (`/diary`) | Your private entries | | Feed anything else |
 | Study Coach (`/coach`) | What you decided about its suggestions, and its daily briefings | Journal, syllabus, revision, mocks, Roadmap, goals, habits, life | Read the diary; change a plan, goal or the revision queue without your confirmation |
-| Command Center (`/dashboard`) | Nothing of its own | Everything above except the diary | |
+| Home (`/dashboard`) | Nothing of its own | Everything above except the diary | |
 
 ## The shared activity layer
 

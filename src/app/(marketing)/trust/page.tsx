@@ -105,7 +105,7 @@ const PRIVACY: { icon: React.ElementType; title: string; body: string; anchor: s
 ];
 
 const RECORD = ["Daily Journal", "Life Dashboard", "Revision", "Roadmap", "Goals", "Mock Analytics", "Subject Progress"];
-const SEE = ["Command Center", "My Habits", "Performance Review", "Study Coach", "Study Heatmap", "Reminders"];
+const SEE = ["Home", "My Habits", "Performance Review", "Study Coach", "Study Heatmap", "Reminders"];
 
 function Column({ title, items, tone = "plain" }: { title: string; items: string[]; tone?: "plain" | "accent" }) {
   return (

@@ -111,3 +111,19 @@ The browser tests (`tests/e2e/accounts.e2e.mjs`) skip the tour with
 is open the app behind it can't be reached. The made-up accounts behind the
 product screenshots and the promo film have `tourSeenAt`, so their Tour button
 shows no dot.
+
+
+## Contextual entry guides
+
+The shell shows **Entry guide** on the pages that have student entry
+workflows. The guide icon is labelled for its page on phones. It opens the
+relevant step-by-step instructions and a replayable sample action. The
+examples use local component state and make no writes. They explain the
+effect of a real save, including where Study, Revision, Habits and Roadmap
+read one another’s records.
+
+Daily Capture has its own guide inside the workspace. The guide appears
+above the workspace and closing it returns focus to the guide button.
+The broader tour remains available through **Full tour** in page guides
+and the desktop **Tour** button. The existing first-visit tour still
+introduces the app on Home.

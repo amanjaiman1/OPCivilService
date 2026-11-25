@@ -22,7 +22,9 @@ const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
 /** A day from the address bar: a valid date no later than today, else today. */
 export function parseCaptureDate(v: string | null | undefined, today: ISODate): ISODate {
-  return v && ISO.test(v) && !Number.isNaN(Date.parse(v)) && v <= today ? v : today;
+  if (!v || !ISO.test(v) || v > today) return today;
+  const parsed = new Date(v);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === v ? v : today;
 }
 
 /* ── goals ─────────────────────────────────────────────────────── */

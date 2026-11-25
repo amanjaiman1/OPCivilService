@@ -68,7 +68,7 @@ export function FeatureGate({ children }: { children: React.ReactNode }) {
       <h1 className="mt-4 text-lg font-semibold tracking-snugg text-paper">{FEATURES[feature].label} isn&apos;t available on this account</h1>
       <p className="mt-1.5 text-sm leading-relaxed text-paper/65">Everything you&apos;ve recorded is safe, and the rest of DoOrDie works as usual.</p>
       <Link href="/dashboard" className="mt-5 inline-flex text-sm font-semibold text-accent hover:underline">
-        Go to the Command Center
+        Go to Home
       </Link>
     </Card>
   );

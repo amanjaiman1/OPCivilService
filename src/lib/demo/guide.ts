@@ -18,9 +18,9 @@ export interface DemoStep {
 export const DEMO_STEPS: DemoStep[] = [
   {
     path: "/dashboard",
-    page: "Command Center",
+    page: "Home",
     title: "The whole preparation on one screen",
-    body: "Meera's Command Center: today, the year of study days, revision due, mock trends, goals and habits, each worked out from her records on the other pages.",
+    body: "Meera’s Home page: today, the year of study days, revision due, mock trends, goals and habits, each worked out from her records on the other pages.",
     tryIt: "Scroll through it. Nothing here is typed in twice.",
   },
   {

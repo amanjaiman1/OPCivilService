@@ -2,13 +2,11 @@
 
 import { forwardRef, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Activity,
   AlertTriangle,
   ArrowUpRight,
-  CalendarDays,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -24,6 +22,7 @@ import { format } from "date-fns";
 import type { ISODate, JournalEntry, LifeEntry } from "@/lib/types";
 import { didAccountSnapshotWriteFail } from "@/lib/account/scope";
 import { useChronicle } from "@/lib/store";
+import type { CaptureTarget } from "@/lib/capture-routing";
 import { useNow } from "@/lib/hooks";
 import { habitContext, habitsMovedOn, movedSummary, summarizeToday, todayHabits } from "@/lib/habit-engine";
 import { shiftDay, trackedFields } from "@/lib/life";
@@ -39,7 +38,6 @@ import {
   lifeRecorded,
   linkChanges,
   parseCaptureDate,
-  parseSection,
   previewHabits,
   type CaptureSection,
   type GoalDraft,
@@ -56,19 +54,20 @@ import {
   commitJournalEntry,
   prepareJournalEntry,
   useJournalEditor,
-  type JournalCelebration,
 } from "@/components/journal/journal-editor";
 import { LifeFields, TrackedFieldsDialog, useLifeEditor } from "@/components/life/life-form";
+import { EntryGuideButton } from "@/components/tour/entry-guide-button";
+import { captureGuide } from "@/lib/entry-guides";
 import { GoalsTab } from "./goals-tab";
 import { HabitTab } from "./habit-tab";
 import { draftDates, readDraft, writeDraft } from "./draft-store";
 import { cn, formatDate, formatHours, toISODate } from "@/lib/utils";
 
 const SECTIONS: { id: CaptureSection; label: string; icon: LucideIcon }[] = [
-  { id: "day", label: "Day Update", icon: NotebookPen },
+  { id: "day", label: "Study", icon: NotebookPen },
   { id: "life", label: "Life", icon: Activity },
   { id: "goals", label: "Goals", icon: Target },
-  { id: "habit", label: "Habit", icon: CircleCheck },
+  { id: "habit", label: "Habits", icon: CircleCheck },
 ];
 const LABEL = Object.fromEntries(SECTIONS.map((s) => [s.id, s.label])) as Record<CaptureSection, string>;
 
@@ -84,14 +83,6 @@ interface SectionView {
   done: boolean | null;
 }
 
-const DOT: Record<SectionState, string> = {
-  empty: "bg-paper/25",
-  progress: "bg-warning",
-  complete: "bg-positive",
-  unsaved: "bg-accent",
-  error: "bg-danger",
-  na: "bg-paper/15",
-};
 
 interface SectionResult {
   ok: boolean;
@@ -125,29 +116,29 @@ const byDate = <T extends { date: string }>(a: T, b: T) => a.date.localeCompare(
  */
 export function CaptureWorkspace({
   onClose,
-  onCelebrate,
+  target: initialTarget,
+  returnFocus,
 }: {
   onClose: () => void;
-  /** A first entry for the day was saved: the celebration is the page's to show. */
-  onCelebrate: (c: JournalCelebration) => void;
+  target: CaptureTarget;
+  returnFocus: HTMLElement | null;
 }) {
-  const params = useSearchParams();
-  const paramKey = params.toString();
   const { accountId, mode, flush, syncNow } = useAccount();
   const { sync } = useSyncStatus();
   const confirm = useConfirm();
   const toast = useToast();
   const today = toISODate(useNow(60_000));
 
-  const [date, setDate] = useState<ISODate>(() => parseCaptureDate(params.get("date"), toISODate(new Date())));
-  const [section, setSection] = useState<CaptureSection>(() => parseSection(params.get("section")));
-  const [visited, setVisited] = useState<Set<CaptureSection>>(() => new Set([parseSection(params.get("section"))]));
+  const [date, setDate] = useState<ISODate>(() => parseCaptureDate(initialTarget.date, toISODate(new Date())));
+  const [section, setSection] = useState<CaptureSection>(() => initialTarget.section ?? "day");
+  const [visited, setVisited] = useState<Set<CaptureSection>>(() => new Set([initialTarget.section ?? "day"]));
   const [loaded, setLoaded] = useState<ISODate | null>(null);
   const [restored, setRestored] = useState(false);
   const [saving, setSaving] = useState(false);
   const [outcome, setOutcome] = useState<SaveOutcome | null>(null);
   /** Set once everything is saved, so closing doesn't keep a stale draft. */
   const skipPersist = useRef(false);
+  const tabAnchor = useRef<HTMLDivElement>(null);
   const [fieldsOpen, setFieldsOpen] = useState(false);
   const savingRef = useRef(false);
   const dateRef = useRef(date);
@@ -287,31 +278,15 @@ export function CaptureWorkspace({
   /* ── the day and the tab live in the address ────────────────── */
 
   const changeDate = useCallback((next: ISODate) => {
-    if (!next || next === dateRef.current) return;
+    if (!next || next === dateRef.current || savingRef.current) return;
     persistRef.current(); // this day's unsaved edits wait for it under its own key
     setDate(next);
   }, []);
   const selectSection = useCallback((s: CaptureSection) => {
     setSection(s);
     setVisited((v) => (v.has(s) ? v : new Set(v).add(s)));
+    tabAnchor.current?.closest("[data-modal-scroll]")?.scrollTo({ top: 0 });
   }, []);
-
-  useEffect(() => {
-    const qs = new URLSearchParams();
-    if (date !== today) qs.set("date", date);
-    if (section !== "day") qs.set("section", section);
-    const next = qs.toString();
-    if (next !== window.location.search.replace(/^\?/, "")) window.history.replaceState(null, "", next ? `/journal?${next}` : "/journal");
-  }, [date, section, today]);
-
-  // Links into the page: ?new=1 (today's entry), ?date=…, ?section=…, and
-  // the journal's old ?tab=topics|analysis, which now live on History.
-  useEffect(() => {
-    const p = new URLSearchParams(paramKey);
-    const fresh = p.get("new") === "1";
-    changeDate(fresh ? toISODate(new Date()) : parseCaptureDate(p.get("date"), toISODate(new Date())));
-    selectSection(fresh ? "day" : parseSection(p.get("section")));
-  }, [paramKey, changeDate, selectSection]);
 
   /* ── the Habit Engine's view of the day, unsaved edits included ─ */
 
@@ -395,8 +370,6 @@ export function CaptureWorkspace({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [outcome, dirty.day, dirty.life, dirty.goals, dirty.habit, savedEntry, lifeEd.entry, lifeEd.saved, tracked, goals, date, goalIdsChanged, linkDiff, habitSummary, liveHours, target]);
 
-  const applicable = SECTIONS.filter((s) => views[s.id].done !== null).length;
-  const captured = SECTIONS.filter((s) => views[s.id].done === true).length;
 
   /* ── Save All Changes ───────────────────────────────────────── */
 
@@ -411,7 +384,6 @@ export function CaptureWorkspace({
     const s = () => useChronicle.getState();
     const results: SaveOutcome["results"] = {};
     const goalErrors: Record<string, string> = {};
-    let earned: JournalCelebration | null = null;
     let journalSaved = false;
 
     try {
@@ -436,7 +408,7 @@ export function CaptureWorkspace({
               });
               if (!ok) throw new Error("Not saved, so the other version stays. Review the entry and save again.");
             }
-            earned = commitJournalEntry(journalEd, prepared.entry, { isEdit: Boolean(latest) }).celebration;
+            commitJournalEntry(journalEd, prepared.entry, { isEdit: Boolean(latest) });
             journalSaved = true;
             results.day = { ok: true };
           }
@@ -535,7 +507,7 @@ export function CaptureWorkspace({
       if (!failedNames.length) {
         const moved = movedSummary(habitsMovedOn(after.habits, habitContext(after, today), date, ["journal", "life", "revision", "roadmap"]));
         toast({
-          title: `${formatDate(date)} saved`,
+          title: cloud === "pending" ? "Saved on this device · sync pending" : `${formatDate(date)} saved`,
           description: [list.length ? list.map(([k]) => LABEL[k]).join(", ") + " saved." : undefined, moved].filter(Boolean).join(" "),
         });
       } else {
@@ -545,7 +517,6 @@ export function CaptureWorkspace({
           tone: "error",
         });
       }
-      if (earned) onCelebrate(earned);
       if (!failedNames.length) {
         // Everything is saved: the form closes, as every entry form does.
         skipPersist.current = true;
@@ -556,7 +527,7 @@ export function CaptureWorkspace({
       savingRef.current = false;
       setSaving(false);
     }
-  }, [anyDirty, waitingForStorage, journalEd, lifeEd, dirty.day, dirty.life, dirty.goals, dirty.habit, date, today, confirm, goalIdsChanged, goalDrafts, linkDiff, habitDrafts, resetJournal, loadLife, mode, flush, toast, accountId, onCelebrate, onClose]);
+  }, [anyDirty, waitingForStorage, journalEd, lifeEd, dirty.day, dirty.life, dirty.goals, dirty.habit, date, today, confirm, goalIdsChanged, goalDrafts, linkDiff, habitDrafts, resetJournal, loadLife, mode, flush, toast, accountId, onClose]);
 
   const discardAll = useCallback(async () => {
     const ok = await confirm({
@@ -620,8 +591,8 @@ export function CaptureWorkspace({
         return (
           <div className="space-y-4">
             <PanelIntro
-              title={lifeEd.saved ? "The day's readings" : "Log the day"}
-              text={`${lifeEd.saved ? `Showing what's saved for ${formatDate(date)}.` : `Nothing saved for ${formatDate(date)} yet.`} Empty boxes are saved as not recorded, never as zero.`}
+              title="Life readings"
+              text="Leave a field empty when you have no reading."
               link={{ href: "/wellbeing", label: "Life Dashboard" }}
             />
             {lifeEd.touched && !lifeEd.valid && <Notice tone="danger">Fix the highlighted fields to save.</Notice>}
@@ -681,7 +652,7 @@ export function CaptureWorkspace({
   const footer = (
     <>
       <p className="mr-auto hidden min-w-0 truncate text-[0.76rem] text-paper/55 sm:block">
-        {saving ? "Saving…" : anyDirty ? `Unsaved: ${unsavedNames.join(", ")}` : "Keys 1–4 switch tabs · Ctrl + S saves"}
+        {saving ? "Saving…" : anyDirty ? `Unsaved: ${unsavedNames.join(", ")}` : "Ctrl + S saves"}
       </p>
       {anyDirty && (
         <Button variant="ghost" onClick={() => void discardAll()} disabled={saving} className="hidden sm:inline-flex">
@@ -702,8 +673,9 @@ export function CaptureWorkspace({
         open
         onClose={() => void requestClose()}
         title="Daily Capture"
+        returnFocus={returnFocus}
         description={`${longDate(date)}${date === today ? " · Today" : ""}`}
-        className="sm:max-w-5xl"
+        className="capture-dialog sm:max-w-5xl"
         footer={footer}
       >
         <div className="space-y-3">
@@ -711,19 +683,7 @@ export function CaptureWorkspace({
             <WeekStrip date={date} today={today} logged={loggedDays} waiting={waitingDays} onPick={changeDate} />
             <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-1.5">
               <SaveStatus saving={saving} anyDirty={anyDirty} outcome={outcome} failures={failures} mode={mode} sync={sync} onRetry={() => (anyDirty || waitingForStorage ? void saveAll() : syncNow())} />
-              <div className="flex items-center gap-2.5" role="group" aria-label={date === today ? "Today's progress" : "Progress for this day"}>
-                <div className="flex gap-1" aria-hidden>
-                  {SECTIONS.map((s) => (
-                    <span key={s.id} className={cn("h-1.5 w-6 rounded-full transition-colors duration-300", DOT[views[s.id].state])} />
-                  ))}
-                </div>
-                <p className="text-[0.76rem] text-paper/60">
-                  <span className="tabular font-semibold text-paper">
-                    {captured} of {applicable}
-                  </span>{" "}
-                  captured
-                </p>
-              </div>
+              <EntryGuideButton guide={captureGuide} inCapture />
             </div>
           </div>
 
@@ -754,14 +714,14 @@ export function CaptureWorkspace({
           )}
 
           {/* The tabs float in view while the form scrolls under the glass. */}
-          <div className="sticky top-0 z-10 -mx-3 bg-gradient-to-b from-card from-45% to-transparent px-3 pb-1.5 pt-0.5">
+          <div ref={tabAnchor} className="sticky top-0 z-10 bg-card py-2">
             <CaptureTabs section={section} onSelect={selectSection} views={views} />
           </div>
 
           <div>
             {SECTIONS.map((s) =>
-              visited.has(s.id) ? (
-                <div key={s.id} role="tabpanel" id={`capture-panel-${s.id}`} aria-labelledby={`capture-tab-${s.id}`} hidden={section !== s.id}>
+              <div key={s.id} role="tabpanel" id={`capture-panel-${s.id}`} aria-labelledby={`capture-tab-${s.id}`} hidden={section !== s.id}>
+                {visited.has(s.id) && (
                   <motion.div
                     initial={{ opacity: 0, y: 6 }}
                     animate={section === s.id ? { opacity: 1, y: 0 } : { opacity: 0, y: 6 }}
@@ -769,8 +729,8 @@ export function CaptureWorkspace({
                   >
                     {panel(s.id)}
                   </motion.div>
-                </div>
-              ) : null,
+                )}
+              </div>,
             )}
           </div>
         </div>
@@ -877,13 +837,13 @@ function WeekStrip({
   waiting: Set<ISODate>;
   onPick: (d: ISODate) => void;
 }) {
-  const picker = useRef<HTMLInputElement>(null);
   const end = shiftDay(date, 3) < today ? shiftDay(date, 3) : today;
   const days = Array.from({ length: 7 }, (_, i) => shiftDay(end, i - 6));
-  const arrow = "grid h-9 w-8 shrink-0 place-items-center rounded-lg text-paper/60 hover:bg-paper/[0.05] hover:text-paper disabled:cursor-not-allowed disabled:opacity-35";
+  const arrow = "grid min-h-11 w-8 shrink-0 place-items-center rounded-lg text-paper/60 hover:bg-paper/[0.05] hover:text-paper disabled:cursor-not-allowed disabled:opacity-35";
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+      <div className="flex min-w-0 items-center gap-1">
       <button type="button" onClick={() => onPick(shiftDay(date, -1))} aria-label="Previous day" className={arrow}>
         <ChevronLeft className="h-4 w-4" />
       </button>
@@ -900,7 +860,7 @@ function WeekStrip({
               aria-pressed={on}
               aria-label={`${longDate(d)}${state}`}
               className={cn(
-                "flex min-w-0 flex-col items-center gap-0.5 rounded-xl py-1.5 transition-colors duration-200",
+                "flex min-w-0 flex-col items-center gap-0.5 rounded-xl py-1.5 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                 on ? "bg-accent text-accent-fg shadow-accent" : "text-paper/75 hover:bg-paper/[0.05] hover:text-paper",
               )}
             >
@@ -929,53 +889,20 @@ function WeekStrip({
       <button type="button" onClick={() => onPick(shiftDay(date, 1))} disabled={date >= today} aria-label="Next day" className={arrow}>
         <ChevronRight className="h-4 w-4" />
       </button>
-      <div className="relative shrink-0">
-        <button
-          type="button"
-          aria-label="Pick any day"
-          onClick={() => {
-            try {
-              picker.current?.showPicker();
-            } catch {
-              picker.current?.focus();
-            }
-          }}
-          className="grid h-9 w-9 place-items-center rounded-lg border border-line text-paper/70 hover:text-paper"
-        >
-          <CalendarDays className="h-4 w-4" />
-        </button>
+      </div>
+      <label className="flex items-center gap-2 text-xs font-medium text-paper/65">
+        <span className="shrink-0">Date</span>
         <input
-          ref={picker}
           type="date"
           value={date}
           max={today}
-          onChange={(e) => onPick(parseCaptureDate(e.target.value, today))}
-          tabIndex={-1}
-          aria-hidden
-          className="pointer-events-none absolute inset-0 h-full w-full opacity-0"
+          onChange={(e) => { if (e.target.value) onPick(parseCaptureDate(e.target.value, today)); }}
+          className="field min-h-10 min-w-0 rounded-lg border border-line px-2 py-1.5 text-sm text-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         />
-      </div>
+      </label>
     </div>
   );
 }
-
-/** The links between tabs take the colours of the two sections they join. */
-const RAIL_FROM: Record<SectionState, string> = {
-  empty: "from-paper/25",
-  progress: "from-warning",
-  complete: "from-positive",
-  unsaved: "from-accent",
-  error: "from-danger",
-  na: "from-paper/15",
-};
-const RAIL_TO: Record<SectionState, string> = {
-  empty: "to-paper/25",
-  progress: "to-warning",
-  complete: "to-positive",
-  unsaved: "to-accent",
-  error: "to-danger",
-  na: "to-paper/15",
-};
 
 const FIGURE: Record<SectionState, string> = {
   empty: "text-paper/50",
@@ -986,11 +913,6 @@ const FIGURE: Record<SectionState, string> = {
   na: "text-paper/40",
 };
 
-/**
- * The four tabs as one bar of liquid glass: the selected tab is a lens of
- * tinted glass that glides along it, each tab shows its figure, and a mark on
- * the icon says whether the section is done, unsaved or failed.
- */
 function CaptureTabs({
   section,
   onSelect,
@@ -1037,28 +959,8 @@ function CaptureTabs({
       role="tablist"
       aria-label="Daily Capture sections"
       onKeyDown={onKeyDown}
-      className="lg-clear relative isolate grid w-full grid-cols-4 gap-1 rounded-xl border border-line p-1"
+      className="grid w-full grid-cols-4 gap-1 rounded-xl border border-line bg-paper/[0.03] p-1"
     >
-      {/* The links: a rail from each icon to the next, lit in the colours of the
-          sections it joins, with light running along it from one tab to the next. */}
-      {SECTIONS.slice(0, -1).map((s, i) => {
-        const from = views[s.id].state;
-        const to = views[SECTIONS[i + 1].id].state;
-        return (
-          <span
-            key={`link-${s.id}`}
-            aria-hidden
-            className="pointer-events-none absolute top-[22px] h-[3px] overflow-hidden rounded-full bg-paper/10 sm:top-[24px]"
-            style={{ left: `calc(${(i + 0.5) * 25}% + 21px)`, width: "calc(25% - 42px)" }}
-          >
-            <span className={cn("absolute inset-0 rounded-full bg-gradient-to-r opacity-75 transition-colors duration-500", RAIL_FROM[from], RAIL_TO[to])} />
-            <span
-              className="capture-flow absolute inset-y-0 left-0 w-1/3 rounded-full bg-gradient-to-r from-transparent via-white/90 to-transparent"
-              style={{ animationDelay: `${i * 0.5}s` }}
-            />
-          </span>
-        );
-      })}
       {SECTIONS.map((s, i) => {
         const active = section === s.id;
         const v = views[s.id];
@@ -1079,22 +981,13 @@ function CaptureTabs({
             title={`${s.label}: ${v.text}`}
             onClick={() => onSelect(s.id)}
             className={cn(
-              "group relative flex min-w-0 flex-col items-center gap-1 rounded-lg bg-transparent px-1 py-1.5 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/45",
-              active ? "text-accent" : "text-paper/65 hover:text-paper",
+              "group flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-lg px-1 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/45",
+              active ? "bg-card text-accent shadow-soft ring-1 ring-line" : "text-paper/65 hover:text-paper",
             )}
           >
-            {active && (
-              <motion.span
-                layoutId="capture-lens"
-                className="lg-lens absolute inset-0 -z-10 rounded-lg"
-                transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.85 }}
-                aria-hidden
-              />
-            )}
             <span
               className={cn(
-                "relative grid h-7 w-7 shrink-0 place-items-center rounded-md transition-colors duration-200 sm:h-8 sm:w-8",
-                active ? "bg-accent/15 ring-1 ring-accent/30" : "bg-card ring-1 ring-line group-hover:ring-paper/25",
+                "relative hidden h-6 w-6 shrink-0 place-items-center sm:grid",
               )}
             >
               <Icon className="h-4 w-4" strokeWidth={active ? 2.2 : 1.9} aria-hidden />
@@ -1109,7 +1002,7 @@ function CaptureTabs({
             </span>
             <span className="flex min-w-0 max-w-full items-baseline justify-center gap-1.5">
               <span className={cn("truncate text-[0.66rem] font-semibold leading-tight tracking-snugg sm:text-[0.78rem]", active && "text-paper")}>{s.label}</span>
-              <span className={cn("tabular hidden shrink-0 text-[0.66rem] font-medium leading-tight sm:inline", FIGURE[v.state])}>{v.badge}</span>
+              <span className={cn("tabular hidden shrink-0 text-[0.66rem] font-medium leading-tight lg:inline", FIGURE[v.state])}>{v.badge}</span>
             </span>
             <span className="sr-only">, {v.text}</span>
           </button>

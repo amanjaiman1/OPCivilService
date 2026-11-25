@@ -1,6 +1,6 @@
 # Daily Journal
 
-> Daily Journal now opens **Daily Capture** (see [daily-capture.md](daily-capture.md)). The entry list described here lives at `/journal/history`.
+> Daily Journal opens entries, topics and analysis at `/journal`. Use **Add entry** or **Capture today** to open [Daily Capture](daily-capture.md). The historical `/journal/history` link still opens journal records.
 
 One entry per calendar day (`JournalEntry` in `src/lib/types.ts`, unique by
 `date`). This page describes how it works now; the original design is kept at

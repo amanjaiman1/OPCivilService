@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { CaptureSectionButton } from "@/components/capture/capture-trigger";
 import {
   Moon,
   BrainCircuit,
@@ -290,9 +291,9 @@ export default function LifeDashboardPage() {
                 Journal: {todayJournal.totalHours > 0 ? `${formatHours(todayJournal.totalHours)} studied` : "no study hours yet"}
               </Link>
             ) : (
-              <Link href="/journal?new=1" className="inline-flex items-center gap-1.5 hover:text-accent">
+              <CaptureSectionButton target={{}} className="inline-flex items-center gap-1.5 hover:text-accent">
                 <BookOpen className="h-3.5 w-3.5" /> No journal entry yet
-              </Link>
+              </CaptureSectionButton>
             )}
             {todayFiles > 0 && (
               <button type="button" onClick={() => openForm(today)} className="inline-flex items-center gap-1.5 hover:text-accent">

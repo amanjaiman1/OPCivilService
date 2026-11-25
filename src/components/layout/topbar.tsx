@@ -1,8 +1,11 @@
 "use client";
 
 import { AppLink as Link } from "./app-link";
+import { usePathname } from "next/navigation";
+import { entryGuideForPath } from "@/lib/entry-guides";
+import { EntryGuideButton } from "@/components/tour/entry-guide-button";
 import { warmOverlays } from "./overlays";
-import { CalendarClock, Command, Menu, Plus, Search } from "lucide-react";
+import { CalendarClock, Command, Menu, Search } from "lucide-react";
 import { Logo } from "./logo";
 import { AccountMenu } from "@/components/account/account-menu";
 import { useAccount } from "@/components/account/account-session";
@@ -32,6 +35,7 @@ export function Topbar({
   /** The rail is showing, with the account and notifications on it. */
   desktop: boolean;
 }) {
+  const guide = entryGuideForPath(usePathname());
   const profile = useChronicle((s) => s.profile);
   const { mode } = useAccount();
   const mounted = useMounted();
@@ -45,7 +49,7 @@ export function Topbar({
             <IconButton label="Open menu" onClick={onOpenDrawer}>
               <Menu className="h-5 w-5" />
             </IconButton>
-            <Link href="/dashboard" aria-label="DoOrDie — dashboard" className="flex items-center gap-2 px-1">
+            <Link href="/dashboard" aria-label="DoOrDie — Home" className="flex items-center gap-2 px-1">
               <Logo className="h-6 w-6" />
               <span className="hidden font-brand text-[0.95rem] font-bold tracking-[-0.03em] text-paper min-[400px]:inline">DoOrDie</span>
             </Link>
@@ -87,13 +91,14 @@ export function Topbar({
         )}
 
         {desktop && <TourButton variant="pill" />}
+        {guide && <EntryGuideButton guide={guide} />}
 
         {!desktop && (
           <>
             <IconButton label="Search" onClick={onOpenPalette} onTouchStart={() => warmOverlays("palette")}>
               <Search className="h-5 w-5" />
             </IconButton>
-            <TourButton variant="icon" />
+            {!guide && <TourButton variant="icon" />}
             <NotificationCentre />
             <AccountMenu />
           </>
@@ -104,13 +109,6 @@ export function Topbar({
             account's reminders must never reach the device. */}
         {mode !== "demo" && <Notifier />}
 
-        <Link
-          href="/journal?new=1"
-          className="hidden shrink-0 items-center gap-2 rounded-full bg-accent px-4 py-2.5 text-sm font-semibold tracking-snugg text-accent-fg shadow-accent transition-all duration-200 hover:-translate-y-px hover:brightness-[1.06] active:translate-y-0 sm:inline-flex"
-        >
-          <Plus className="h-4 w-4" />
-          Log today
-        </Link>
       </div>
     </header>
   );

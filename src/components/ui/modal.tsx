@@ -15,6 +15,8 @@ import { cn } from "@/lib/utils";
  */
 const modalStack: object[] = [];
 
+export const hasOpenOverlay = () => modalStack.length > 0;
+
 function lockScroll() {
   if (modalStack.length === 1) document.body.style.overflow = "hidden";
 }
@@ -54,6 +56,7 @@ export function Modal({
   footer,
   className,
   ariaLabel,
+  returnFocus,
   placement = "center",
 }: {
   open: boolean;
@@ -61,6 +64,7 @@ export function Modal({
   title?: string;
   /** The dialog's accessible name when it draws its own heading instead of `title`. */
   ariaLabel?: string;
+  returnFocus?: HTMLElement | null;
   description?: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
@@ -85,7 +89,7 @@ export function Modal({
     const token = {};
     modalStack.push(token);
     lockScroll();
-    const before = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const before = returnFocus ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     const isTop = () => modalStack[modalStack.length - 1] === token;
 
     // Focus moves into the dialog: a field marked `data-autofocus`, else the
@@ -136,7 +140,7 @@ export function Modal({
       // Back where you were.
       if (before && before.isConnected && before !== document.body) before.focus({ preventScroll: true });
     };
-  }, [open]);
+  }, [open, returnFocus]);
 
   if (!mounted) return null;
 
@@ -193,17 +197,17 @@ export function Modal({
                 <button
                   onClick={onClose}
                   aria-label="Close"
-                  className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-line text-paper/45 transition-colors hover:bg-paper/[0.06] hover:text-paper"
+                  className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-line text-paper/60 transition-colors hover:bg-paper/[0.06] hover:text-paper"
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
             )}
-            <div className="no-scrollbar flex-1 overflow-y-auto px-5 py-5">
+            <div data-modal-scroll className="no-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5 sm:py-5">
               {children}
             </div>
             {footer && (
-              <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3.5">
+              <div className="flex items-center justify-end gap-2 border-t border-line px-4 pb-[max(0.875rem,env(safe-area-inset-bottom))] pt-3.5 sm:px-5">
                 {footer}
               </div>
             )}

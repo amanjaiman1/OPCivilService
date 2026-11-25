@@ -55,6 +55,7 @@ export default function BooksPage() {
 
   const [filter, setFilter] = useState<BookStatus | "all">("all");
   const [open, setOpen] = useState(false);
+  const [attemptedEntry, setAttemptedEntry] = useState(false);
   const [draft, setDraft] = useState<Book>(emptyBook());
 
   const filtered = useMemo(
@@ -81,6 +82,7 @@ export default function BooksPage() {
           <Button
             onClick={() => {
               setDraft(emptyBook());
+              setAttemptedEntry(false);
               setOpen(true);
             }}
           >
@@ -210,7 +212,7 @@ export default function BooksPage() {
             <Button
               onClick={() => {
                 if (!draft.title.trim()) {
-                  toast({ title: "Give the book a title", description: "It's how you'll find it in your library.", tone: "error" });
+                  setAttemptedEntry(true);
                   return;
                 }
                 const added = !books.some((b) => b.id === draft.id);
@@ -228,7 +230,7 @@ export default function BooksPage() {
         }
       >
         <div className="space-y-4">
-          <Field label="Title">
+          <Field label="Title" error={attemptedEntry && !draft.title.trim() ? "Enter the book title." : undefined}>
             <Input
               value={draft.title}
               onChange={(e) => setDraft({ ...draft, title: e.target.value })}
@@ -236,7 +238,7 @@ export default function BooksPage() {
             />
           </Field>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Author">
+            <Field label="Author" optional>
               <Input
                 value={draft.author}
                 onChange={(e) => setDraft({ ...draft, author: e.target.value })}
@@ -271,7 +273,7 @@ export default function BooksPage() {
                 }
               />
             </Field>
-            <Field label="Current page">
+            <Field label="Current page" hint="Use 0 if you haven’t started reading.">
               <Input
                 type="number"
                 value={draft.currentPage}

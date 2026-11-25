@@ -1,5 +1,6 @@
 "use client";
 
+import type { EntryGuide } from "@/lib/entry-guides";
 import { createContext, useContext } from "react";
 
 /* ════════════════════════════════════════════════════════════════
@@ -14,6 +15,7 @@ export interface TourContextValue {
   open: () => void;
   /** Starts downloading the tour, so opening it is instant. */
   prepare: () => void;
+  openGuide: (guide: EntryGuide, inCapture?: boolean) => void;
   isOpen: boolean;
   /** Never seen on this account: the button carries a dot. */
   fresh: boolean;
