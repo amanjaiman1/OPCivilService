@@ -38,7 +38,6 @@ export function SleepSummary({ compact }: { compact?: boolean }) {
   const format = timeFormatOf(profile);
   const week = useMemo(() => sleepStats(lifeLog, today, 7), [lifeLog, today]);
   const month = useMemo(() => sleepStats(lifeLog, today, 30), [lifeLog, today]);
-  const aim = targetMinutes(profile.sleepTarget);
 
   if (!month.nights && !month.avgBedtime) {
     return <p className="text-[0.75rem] text-paper/55">Averages appear here once a few nights are recorded.</p>;
@@ -58,13 +57,7 @@ export function SleepSummary({ compact }: { compact?: boolean }) {
         {cell("Usual bedtime", month.avgBedtime ? formatClock(month.avgBedtime, format) : "—", "last 30 days")}
         {cell("Usual wake-up", month.avgWake ? formatClock(month.avgWake, format) : "—", "last 30 days")}
       </div>
-      {aim != null && week.avgHours != null && (
-        <p className="text-[0.72rem] text-paper/60">
-          {Math.abs(week.avgHours * 60 - aim) <= 10
-            ? `This week is right on your ${formatDuration(aim)} aim.`
-            : `This week averages ${formatDuration(Math.abs(week.avgHours * 60 - aim))} ${week.avgHours * 60 < aim ? "under" : "over"} your ${formatDuration(aim)} aim.`}
-        </p>
-      )}
+      <p className="text-xs text-paper/65">Averages include reported sleep and estimates from time in bed.</p>
       {month.excluded > 0 && (
         <p className="text-[0.72rem] text-warning">
           {month.excluded} night{month.excluded === 1 ? "" : "s"} over {MAX_SLEEP_HOURS} hours {month.excluded === 1 ? "isn't" : "aren't"} counted.
@@ -141,7 +134,7 @@ export function SleepSettings({ open, onClose }: { open: boolean; onClose: () =>
           />
         </div>
         <p className="text-[0.78rem] text-paper/65">
-          {aim != null ? `That allows ${formatDuration(aim)} of sleep a night.` : "Set both to see how much sleep that allows."}
+          {aim != null ? `That allows ${formatDuration(aim)} in bed per night.` : "Set both to see the planned time in bed."}
           {(target.bedtime || target.wakeTime) && (
             <button
               type="button"
@@ -195,9 +188,9 @@ export function SleepCard() {
   const quick = useSleepQuickActions();
   const format = timeFormatOf(profile);
   const today = quick.today;
-  const tonight = quick.tonightDate && quick.tonightDate > today ? quick.tonightDate : null;
-  const tonightStarted = Boolean(tonight && lifeLog.some((l) => l.date === tonight && l.bedtime));
-  const latest = tonightStarted && tonight ? tonight : today;
+  const tonight = shift(today, 1);
+  const tonightStarted = lifeLog.some((l) => l.date === tonight && l.bedtime);
+  const latest = tonightStarted ? tonight : today;
 
   const [date, setDate] = useState<ISODate>(latest);
   const [moved, setMoved] = useState(false);
@@ -207,7 +200,6 @@ export function SleepCard() {
     if (!moved) setDate(latest);
   }, [latest, moved]);
 
-  const last = tonight ?? today;
   const label = date === today ? "Last night" : date === tonight ? "Tonight" : "An earlier night";
   const target = profile.sleepTarget;
 
@@ -242,7 +234,7 @@ export function SleepCard() {
           <button
             type="button"
             onClick={() => go(shift(date, 1))}
-            disabled={date >= last}
+            disabled={date >= tonight}
             aria-label="Next night"
             className="grid h-9 w-9 place-items-center rounded-full text-paper/60 hover:bg-paper/[0.06] hover:text-paper disabled:opacity-30"
           >
@@ -289,7 +281,7 @@ export function SleepCard() {
                 setDate(today);
               }}
             >
-              <Sunrise className="h-4 w-4" /> Woke up now · {formatClock(quick.nowClock, format)}
+              <Sunrise className="h-4 w-4" /> Woke up now · {formatClock(quick.wakeClock, format)}
             </Button>
           ) : (
             <Button

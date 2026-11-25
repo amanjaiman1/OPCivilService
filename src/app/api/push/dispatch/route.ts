@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import webpush, { WebPushError } from "web-push";
 import { adminClient } from "@/lib/supabase-admin";
@@ -128,6 +129,8 @@ async function dispatch(request: Request) {
   }
 
   const at = new Date();
+  // Only expired credentials are removed; active ones deduplicate dispatches.
+  await admin.from("chronicle_sleep_push_actions").delete().lt("expires_at", at.toISOString());
   let sent = 0;
   const skipped: { user: string; reason: string }[] = [];
   /**
@@ -159,6 +162,27 @@ async function dispatch(request: Request) {
         device.platform,
         priority,
       );
+      let tokenHash: string | undefined;
+      if (decision.bedtime) {
+        const token = randomBytes(32).toString("hex");
+        tokenHash = createHash("sha256").update(token).digest("hex");
+        const issued = await admin.from("chronicle_sleep_push_actions")
+          .upsert({
+            token_hash: tokenHash,
+            subscription_id: device.id,
+            user_id: userId,
+            night: decision.bedtime.night,
+            timezone: decision.bedtime.timezone,
+            expires_at: new Date(at.getTime() + 7 * 3600_000).toISOString(),
+          }, { onConflict: "subscription_id,night", ignoreDuplicates: true })
+          .select("token_hash");
+        // Skip an already issued delivery. If the action store is unavailable,
+        // avoid sending a payload we cannot deduplicate or record safely.
+        if (issued.error || !issued.data?.length) continue;
+        payload.bedtimeToken = token;
+        payload.bedtimeEndpointHash = createHash("sha256").update(device.endpoint).digest("hex");
+        payload.actions = [{ action: "sleep-now", title: "Sleeping now" }, { action: "later", title: "Later" }];
+      }
       try {
         await webpush.sendNotification(
           {
@@ -176,6 +200,7 @@ async function dispatch(request: Request) {
         deliveredToAny = true;
         sent++;
       } catch (e) {
+        if (tokenHash) await admin.from("chronicle_sleep_push_actions").delete().eq("token_hash", tokenHash);
         const status = e instanceof WebPushError ? e.statusCode : undefined;
         if (isGoneForever(status)) {
           // The push service says this endpoint no longer exists. Anything else

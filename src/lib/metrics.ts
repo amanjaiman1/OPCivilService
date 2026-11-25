@@ -1,7 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import { Moon, Footprints, Scale, Smartphone } from "lucide-react";
 import type { LifeEntry } from "./types";
-import { LIFE_TARGETS } from "./life";
 import { countedSleepHours } from "./sleep";
 
 /* ════════════════════════════════════════════════════════════════
@@ -52,16 +51,15 @@ export const METRICS: Record<MetricId, MetricDef> = {
     label: "Sleep",
     title: "Every night, accounted for.",
     description:
-      "How much you actually slept, night after night — against the target you set, and against how the rest of the day went.",
+      "Recorded sleep and estimates from time in bed, with coverage for the selected period.",
     icon: Moon,
     unit: "h",
     unitLong: "hours",
     read: countedSleepHours,
     rollUp: "mean",
     chart: "bars",
-    target: LIFE_TARGETS.sleepHours,
     decimals: 1,
-    isActiveDay: (v) => v >= LIFE_TARGETS.sleepHours - 0.5,
+    isActiveDay: (v) => v > 0,
   },
   running: {
     id: "running",
@@ -98,17 +96,16 @@ export const METRICS: Record<MetricId, MetricDef> = {
     label: "Screen time",
     title: "Where the hours leak.",
     description:
-      "Time on a screen that wasn't study — the ceiling you set, and how often the day went over it.",
+      "Screen time recorded over the selected period.",
     icon: Smartphone,
     unit: "m",
     unitLong: "minutes",
     read: (e) => e.screenTimeMin,
     rollUp: "mean",
     chart: "bars",
-    target: LIFE_TARGETS.screenTimeMin,
     lowerBetter: true,
     decimals: 0,
-    isActiveDay: (v) => v <= LIFE_TARGETS.screenTimeMin,
+    isActiveDay: (v) => v >= 0,
   },
 };
 

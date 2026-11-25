@@ -15,6 +15,8 @@ import { evaluate, buildInbox, DEFAULT_NOTIFY_SETTINGS, EMPTY_NOTIFY_STATE } fro
 import { habitContext, todayHabits, summarizeToday, habitsOverPeriod } from "../../src/lib/habit-engine";
 import { buildRecommendations, buildBriefing, buildAnalysis, coachDataOf, visibleRecommendations } from "../../src/lib/coach";
 import { measurePeriod, recentPeriods, periodTrend } from "../../src/lib/performance";
+import { buildLifeReport, factorLinks, presetSpan, trackedFields } from "../../src/lib/life";
+import { sleepNights } from "../../src/lib/sleep";
 import { analyseJournal } from "../../src/lib/journal-analysis";
 import { buildMentorContext } from "../../src/lib/mentor";
 import { buildHeatmap, currentStreak } from "../../src/lib/selectors";
@@ -42,6 +44,16 @@ for (const name of ["typical", "heavy"] as DatasetName[]) {
   const r: Record<string, number> = {};
   const json = JSON.stringify({ state: data, version: 17 });
   r["snapshot KB"] = Math.round(json.length / 1024);
+  const span = presetSpan("90d", today);
+  const tracked = trackedFields(data.profile.lifeFields, data.lifeLog);
+  r["Life: 90-day report and associations"] = time(() => {
+    buildLifeReport({ journal: data.journal, lifeLog: data.lifeLog, span, tracked });
+    factorLinks(data.lifeLog, data.journal, span, tracked);
+  });
+  const sleepRows = data.lifeLog
+    .filter((entry) => entry.date >= span.from && entry.date <= span.to)
+    .map((entry) => ({ ...entry, bedtime: "23:30", wakeTime: "07:00", sleepTimezone: "America/New_York" }));
+  r["Life: 90-day sleep timeline"] = time(() => sleepNights(sleepRows));
   r["JSON.stringify (persist write)"] = time(() => JSON.stringify({ state: data, version: 17 }));
   r["JSON.parse (rehydrate)"] = time(() => JSON.parse(json));
   r["notifications: evaluate + inbox"] = time(() =>

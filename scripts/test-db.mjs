@@ -81,6 +81,7 @@ async function main() {
     ["supabase/tests/live_updates.sql", "All live update checks passed"],
     ["supabase/tests/presence.sql", "All presence checks passed"],
     ["supabase/tests/sync_safety.sql", "All sync safety checks passed"],
+    ["supabase/tests/sleep_push_actions.sql", "All sleep push action checks passed"],
   ];
   for (const [file, expected] of checks) {
     const results = await db.exec(read(file));

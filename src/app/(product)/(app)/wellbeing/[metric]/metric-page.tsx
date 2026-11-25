@@ -94,7 +94,7 @@ export function MetricPage() {
     const base = METRICS[id];
     if (aim == null) return base;
     const hours = round(aim / 60, 2);
-    return { ...base, target: hours, isActiveDay: (v: number) => v >= hours - 0.5 };
+    return { ...base, target: hours, isActiveDay: (v: number) => v >= hours };
   }, [id, aim]);
   const format = timeFormatOf(profile);
 
@@ -490,11 +490,6 @@ function rangeWord(range: RangeId): string {
   }
 }
 
-/** "target" for the built-in figure, "goal you set" once there's your own. */
-function aimWord(metric: { target?: number }): string {
-  return metric.target === METRICS.sleep.target ? "target" : "goal you set";
-}
-
 /** The metric-specific reading of the window, in plain sentences. */
 function insightsFor(
   id: keyof typeof METRICS,
@@ -508,16 +503,17 @@ function insightsFor(
   const window = lifeLog.filter((e) => e.date >= from);
 
   if (id === "sleep") {
-    const bed = meanClock(window.map((e) => e.bedtime));
-    const wake = meanClock(window.map((e) => e.wakeTime));
+    const paired = window.filter((entry) => entry.bedtime && entry.wakeTime);
+    const bed = paired.length >= 3 ? meanClock(paired.map((e) => e.bedtime)) : null;
+    const wake = paired.length >= 3 ? meanClock(paired.map((e) => e.wakeTime)) : null;
     if (bed && wake)
-      out.push(`You typically go to sleep around ${formatClock(bed, format)} and wake at ${formatClock(wake, format)}.`);
+      out.push(`Your average recorded bedtime was ${formatClock(bed, format)} and your average wake-up was ${formatClock(wake, format)}.`);
     if (series.targetHitRate != null)
       out.push(
         `${Math.round(series.targetHitRate * 100)}% of recorded nights hit the ${formatMetric(
           metric,
           metric.target,
-        )} ${aimWord(metric)}${series.streak > 1 ? `, and you're on a ${series.streak}-night run` : ""}.`,
+        )} target${series.streak > 1 ? `, and you're on a ${series.streak}-night run` : ""}.`,
       );
     if (series.worst)
       out.push(

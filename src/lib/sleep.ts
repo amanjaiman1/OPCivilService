@@ -1,4 +1,5 @@
 import type { ISODate, LifeEntry, Profile, SleepTarget, TimeFormat } from "./types";
+import { instantForWallTime, isValidTimeZone } from "./zoned-time";
 import { fromISODate, round, toISODate, dateFormat } from "./utils";
 
 /* ════════════════════════════════════════════════════════════════
@@ -75,28 +76,32 @@ export function bedDateFor(date: ISODate, bedtime: string, wakeTime: string): IS
 }
 
 /** Minutes between bedtime and wake-up, from real local dates. Null without both. */
-export function sleepMinutes(date: ISODate, bedtime: string | undefined, wakeTime: string | undefined): number | null {
+export function sleepMinutes(date: ISODate, bedtime: string | undefined, wakeTime: string | undefined, timezone?: string): number | null {
   // The same time twice is no night at all, not a 24-hour one.
   if (!isClock(bedtime) || !isClock(wakeTime) || bedtime === wakeTime) return null;
-  const bed = at(bedDateFor(date, bedtime, wakeTime), bedtime);
-  const wake = at(date, wakeTime);
-  const mins = Math.round((wake.getTime() - bed.getTime()) / 60_000);
+  const bedDate = bedDateFor(date, bedtime, wakeTime);
+  const zoned = timezone && isValidTimeZone(timezone);
+  const bed = zoned ? instantForWallTime(bedDate, bedtime, timezone) : at(bedDate, bedtime).getTime();
+  const wake = zoned ? instantForWallTime(date, wakeTime, timezone) : at(date, wakeTime).getTime();
+  if (bed == null || wake == null) return null;
+  const mins = Math.round((wake - bed) / 60_000);
   return mins > 0 ? mins : null;
 }
 
 export type SleepCheck =
-  | { ok: false; reason: "missing" | "same" | "too-long"; minutes: number | null; message: string }
+  | { ok: false; reason: "missing" | "same" | "too-long" | "invalid"; minutes: number | null; message: string }
   | { ok: true; minutes: number; level: "ok" | "short" | "long"; message?: string };
 
 /** Whether a bedtime and wake-up make a night that can be saved, and anything worth a second look. */
-export function checkSleep(date: ISODate, bedtime: string | undefined, wakeTime: string | undefined): SleepCheck {
+export function checkSleep(date: ISODate, bedtime: string | undefined, wakeTime: string | undefined, timezone?: string): SleepCheck {
   if (!isClock(bedtime) || !isClock(wakeTime)) {
-    return { ok: false, reason: "missing", minutes: null, message: "Set both times to see how long you slept." };
+    return { ok: false, reason: "missing", minutes: null, message: "Set both times to calculate time in bed." };
   }
   if (bedtime === wakeTime) {
     return { ok: false, reason: "same", minutes: null, message: "Bedtime and wake-up can't be the same time." };
   }
-  const minutes = sleepMinutes(date, bedtime, wakeTime) as number;
+  const minutes = sleepMinutes(date, bedtime, wakeTime, timezone);
+  if (minutes == null) return { ok: false, reason: "invalid", minutes: null, message: "Check the times. One may fall in a skipped hour when the clocks changed." };
   if (minutes > MAX_SLEEP_HOURS * 60) {
     return {
       ok: false,
@@ -150,7 +155,7 @@ export function nightOf(e: LifeEntry): SleepNight | null {
   if (!hasSleep(e)) return null;
   const bedtime = isClock(e.bedtime) ? e.bedtime : undefined;
   const wakeTime = isClock(e.wakeTime) ? e.wakeTime : undefined;
-  const timesMinutes = sleepMinutes(e.date, bedtime, wakeTime);
+  const timesMinutes = sleepMinutes(e.date, bedtime, wakeTime, e.sleepTimezone);
   const hours = typeof e.sleepHours === "number" && Number.isFinite(e.sleepHours) ? e.sleepHours : undefined;
   return {
     date: e.date,
@@ -159,7 +164,8 @@ export function nightOf(e: LifeEntry): SleepNight | null {
     wakeTime,
     hours,
     timesMinutes,
-    manualHours: hours != null && timesMinutes != null && Math.abs(hours * 60 - timesMinutes) > 2,
+    manualHours: hours != null && (e.sleepHoursSource === "reported" ||
+      (e.sleepHoursSource == null && timesMinutes != null && Math.abs(hours * 60 - timesMinutes) > 2)),
     quality: typeof e.sleepQuality === "number" ? e.sleepQuality : undefined,
     pending: Boolean(bedtime && !wakeTime && hours == null),
     implausible: hours != null && hours > MAX_SLEEP_HOURS,
@@ -175,8 +181,8 @@ export function sleepNights(lifeLog: LifeEntry[]): SleepNight[] {
 }
 
 /** The hours stored for a night once it is saved: from the times, unless entered by hand. */
-export function hoursFromTimes(date: ISODate, bedtime?: string, wakeTime?: string): number | undefined {
-  const m = sleepMinutes(date, bedtime, wakeTime);
+export function hoursFromTimes(date: ISODate, bedtime?: string, wakeTime?: string, timezone?: string): number | undefined {
+  const m = sleepMinutes(date, bedtime, wakeTime, timezone);
   return m == null ? undefined : round(m / 60, 2);
 }
 

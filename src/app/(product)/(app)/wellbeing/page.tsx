@@ -32,9 +32,10 @@ import { Sparkline } from "@/components/charts/sparkline";
 import { LifeForm, TrackedFieldsDialog } from "@/components/life/life-form";
 import { LifeReportPanel } from "@/components/life/life-report";
 import { SleepCard } from "@/components/sleep/sleep-card";
-import { LIFE_TARGETS, todayEntry, trackedFields, type DateSpan } from "@/lib/life";
+import { todayEntry, trackedFields, type DateSpan } from "@/lib/life";
 import { computeGoalProgress, goalCategory, type GoalData } from "@/lib/goals";
 import { METRIC_IDS, METRICS, formatMetric, formatMinutesAsClock, type MetricId } from "@/lib/metrics";
+import { timeFormatOf } from "@/lib/sleep";
 import { toISODate, formatDate, formatHours, round } from "@/lib/utils";
 
 /** Which tracked field each deep-dive page belongs to. */
@@ -51,8 +52,6 @@ interface Tile {
   label: string;
   value: number | undefined;
   unit: string;
-  target?: number;
-  lowerBetter?: boolean;
   detail?: string;
   href?: string;
 }
@@ -65,32 +64,27 @@ function tilesFor(e: LifeEntry | undefined): Tile[] {
       label: "Exercise",
       value: e?.exerciseMinutes,
       unit: "min",
-      target: LIFE_TARGETS.exerciseMinutes,
       detail: e?.exerciseType,
     },
-    { field: "walk", icon: Footprints, label: "Walking", value: e?.walkKm, unit: "km", target: LIFE_TARGETS.walkKm },
+    { field: "walk", icon: Footprints, label: "Walking", value: e?.walkKm, unit: "km" },
     { field: "run", icon: Footprints, label: "Running", value: e?.runKm, unit: "km", href: "/wellbeing/running" },
-    { field: "water", icon: Droplets, label: "Water", value: e?.waterLiters, unit: "L", target: LIFE_TARGETS.waterLiters },
-    { field: "meditation", icon: Wind, label: "Meditation", value: e?.meditationMin, unit: "min", target: LIFE_TARGETS.meditationMin },
+    { field: "water", icon: Droplets, label: "Water", value: e?.waterLiters, unit: "L" },
+    { field: "meditation", icon: Wind, label: "Meditation", value: e?.meditationMin, unit: "min" },
     {
       field: "screen",
       icon: Smartphone,
       label: "Screen time",
       value: e?.screenTimeMin,
       unit: "min",
-      target: LIFE_TARGETS.screenTimeMin,
-      lowerBetter: true,
       href: "/wellbeing/screen",
     },
     { field: "weight", icon: Scale, label: "Weight", value: e?.weightKg, unit: "kg", href: "/wellbeing/weight" },
-    { field: "deepWork", icon: BrainCircuit, label: "Deep work", value: e?.deepWorkHours, unit: "h", target: LIFE_TARGETS.deepWorkHours },
+    { field: "deepWork", icon: BrainCircuit, label: "Deep work", value: e?.deepWorkHours, unit: "h" },
   ];
 }
 
 function TodayTile({ t }: { t: Tile }) {
   const has = typeof t.value === "number";
-  const pct = has && t.target ? Math.min(100, ((t.value as number) / t.target) * 100) : 0;
-  const hit = has && t.target != null && (t.lowerBetter ? (t.value as number) <= t.target : (t.value as number) >= t.target);
   const inner = (
     <>
       <div className="flex items-center gap-2 text-paper/50">
@@ -106,17 +100,7 @@ function TodayTile({ t }: { t: Tile }) {
       ) : (
         <p className="mt-2.5 text-sm font-medium text-paper/45">Not logged</p>
       )}
-      {has && t.target ? (
-        <>
-          <Progress value={pct} className="mt-2" tone={hit ? "positive" : "accent"} />
-          <p className="mt-1 truncate text-[0.62rem] text-paper/45">
-            {t.detail ? `${t.detail} · ` : ""}
-            {t.lowerBetter ? "limit" : "aim"} {t.target} {t.unit}
-          </p>
-        </>
-      ) : (
-        <p className="mt-2 truncate text-[0.62rem] text-paper/45">{has ? t.detail || "today" : t.target ? `aim ${t.target} ${t.unit}` : "today"}</p>
-      )}
+      {has && t.detail && <p className="mt-2 truncate text-xs text-paper/65">{t.detail}</p>}
     </>
   );
   return t.href ? (
@@ -219,12 +203,14 @@ export default function LifeDashboardPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [formDate, setFormDate] = useState<ISODate>(today);
   const [fieldsOpen, setFieldsOpen] = useState(false);
+  const [sleepReminder, setSleepReminder] = useState(false);
 
   // `/wellbeing?date=<day>` (from the journal) opens that day; `?log=1` opens today.
   useEffect(() => {
     if (!hydrated) return;
     const params = new URLSearchParams(window.location.search);
     const date = params.get("date");
+    setSleepReminder(params.get("sleep") === "reminder");
     if (date && /^\d{4}-\d{2}-\d{2}$/.test(date) && date <= today) openForm(date);
     else if (params.get("log") === "1") openForm(today);
     if (date || params.get("log")) window.history.replaceState({}, "", "/wellbeing");
@@ -264,8 +250,8 @@ export default function LifeDashboardPage() {
     <div className="space-y-8">
       <PageHeader
         eyebrow="Life Dashboard"
-        title="The body carries the mind."
-        description="Log what you track, in under a minute. An empty box means not recorded, never zero, and every report says how many days it stands on."
+        title="Wellbeing and study routines"
+        description="Record today’s wellbeing and explore patterns alongside your study activity."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="ghost" onClick={() => setFieldsOpen(true)}>
@@ -278,12 +264,17 @@ export default function LifeDashboardPage() {
         }
       />
 
-      {trackedSet.has("sleep") && <SleepCard />}
+      {sleepReminder && (
+        <Card className="border-accent/25 bg-accent/[0.06] p-4">
+          <p className="text-sm font-semibold text-paper">Bedtime reminder</p>
+          <p className="mt-1 text-xs text-paper/70">Check the saved bedtime below, or record it if it is still missing.</p>
+        </Card>
+      )}
 
       {/* Today */}
-      <section className="space-y-3">
+      <section className="space-y-4 rounded-3xl border border-line bg-accent/[0.04] p-4 sm:p-6" aria-labelledby="life-today">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold tracking-snugg text-paper">Today · {formatDate(today)}</h2>
+          <h2 id="life-today" className="font-display text-xl font-bold tracking-snugg text-paper">Today <span className="ml-1 text-xs font-medium text-paper/65">{formatDate(today)}</span></h2>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.75rem] text-paper/60">
             {todayJournal ? (
               <Link href={`/journal/${today}`} className="inline-flex items-center gap-1.5 hover:text-accent">
@@ -317,6 +308,8 @@ export default function LifeDashboardPage() {
           </p>
         )}
       </section>
+
+      {(trackedSet.has("sleep") || sleepReminder) && <SleepCard />}
 
       {/* Goals that feed on this page */}
       <section className="space-y-3">
@@ -363,6 +356,8 @@ export default function LifeDashboardPage() {
         tracked={tracked}
         today={today}
         onEdit={openForm}
+        sleepTarget={profile.sleepTarget}
+        timeFormat={timeFormatOf(profile)}
         completedGoals={(span: DateSpan) =>
           goals.filter((g) => g.status === "Completed" && g.completedOn && g.completedOn >= span.from && g.completedOn <= span.to).length
         }

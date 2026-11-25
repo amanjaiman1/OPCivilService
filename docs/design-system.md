@@ -496,3 +496,11 @@ semantic groups. A selected tab and a written save status communicate
 state independently of color. Shared dialogs contain focus and restore
 it to the opener. The entry guide uses a short opacity and position
 transition, with position and duration removed for reduced motion.
+
+### Life Dashboard reporting
+
+The Today group uses a single tinted container and neutral measured values.
+Historical sleep uses a shared-range overnight timeline with clock markers,
+recorded elapsed duration, and a separate target band. Time in bed and reported
+sleep have distinct labels. The logging calendar is paired with the accessible
+daily detail table. Colours reinforce labels and do not supply missing values.

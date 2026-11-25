@@ -262,3 +262,21 @@ test("habits that count Roadmap work are reminded about only when the reader car
   const done = [{ id: "p1", items: [{ id: "a1", kind: "activity", status: "completed", completedAt: "2026-11-15T19:30:00.000Z" }] }] as unknown as Snapshot["plans"];
   assert.deepEqual(decide({ plans: done }), { send: false, reason: "Nothing to deliver." });
 });
+
+test("bedtime is dispatched after 9 local time and obeys quiet hours, preferences and existing records", () => {
+  const base = snapshot({ revisions: [] });
+  const at = utc("2026-11-15T15:35:00Z"); // 21:05 in India
+  const bedtime = (s: Snapshot, when: Date = at) => {
+    const decision = decideForUser(s, [device()], null, when);
+    return decision.send ? decision.bedtime : undefined;
+  };
+  assert.equal(bedtime(base, utc("2026-11-15T15:29:59Z")), undefined);
+  assert.deepEqual(bedtime(base), { night: "2026-11-16", timezone: "Asia/Kolkata" });
+  assert.equal(bedtime(base, utc("2026-11-15T16:30:00Z")), undefined);
+  assert.equal(bedtime({ ...base, notify: { deliver: true, mutedRules: ["bedtime-reminder"] } }), undefined);
+  assert.equal(bedtime({ ...base, lifeLog: [{ id: "n", date: "2026-11-16", bedtime: "20:15" }] }), undefined);
+  const first = decideForUser(base, [device()], null, at);
+  assert.ok(first.send);
+  const repeated = decideForUser(base, [device()], first.nextLog, utc("2026-11-15T16:25:00Z"));
+  assert.equal(repeated.send && Boolean(repeated.bedtime), false);
+});

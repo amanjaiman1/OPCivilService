@@ -167,6 +167,7 @@ export function LifeFields({
           onWakeTime={(v) => setTime("wakeTime", v)}
           format={format}
           target={profile.sleepTarget}
+          timezone={saved?.sleepTimezone}
           compact={page}
         />
         <FieldError>{touched ? errors.sleepTimes : undefined}</FieldError>

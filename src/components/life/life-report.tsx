@@ -14,7 +14,7 @@ import {
   TriangleAlert,
   ThumbsUp,
 } from "lucide-react";
-import type { ISODate, JournalEntry, LifeEntry, LifeField } from "@/lib/types";
+import type { ISODate, JournalEntry, LifeEntry, LifeField, SleepTarget, TimeFormat } from "@/lib/types";
 import {
   MIN_GROUP,
   MIN_PAIRS,
@@ -32,10 +32,13 @@ import {
   type ReportMetric,
   type SpanPreset,
 } from "@/lib/life";
+import { SleepRhythm } from "./sleep-rhythm";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/form";
 import { Segmented } from "@/components/ui/misc";
+import { Heatmap } from "@/components/charts/heatmap";
+import type { HeatCell } from "@/lib/selectors";
 import { BarChart } from "@/components/charts/bar-chart";
 import { cn, formatDate, round, weekday } from "@/lib/utils";
 
@@ -54,7 +57,7 @@ function ChangeLine({ m }: { m: ReportMetric }) {
   if (m.change == null) {
     return (
       <p className="text-[0.7rem] text-paper/45">
-        {m.id === "weight" ? "One reading so far" : "No earlier readings to compare"}
+        {m.id === "weight" ? "One reading so far" : "Not enough readings for a comparison"}
       </p>
     );
   }
@@ -303,6 +306,8 @@ export function LifeReportPanel({
   today,
   onEdit,
   completedGoals,
+  sleepTarget,
+  timeFormat,
 }: {
   journal: JournalEntry[];
   lifeLog: LifeEntry[];
@@ -311,6 +316,8 @@ export function LifeReportPanel({
   onEdit: (date: ISODate) => void;
   /** Goals completed on a date inside the span, worked out by the page. */
   completedGoals: (span: DateSpan) => number;
+  sleepTarget?: SleepTarget;
+  timeFormat: TimeFormat;
 }) {
   const [preset, setPreset] = useState<SpanPreset>("30d");
   const [custom, setCustom] = useState<DateSpan>(() => presetSpan("30d", today));
@@ -323,6 +330,11 @@ export function LifeReportPanel({
   );
   const trackedSet = useMemo(() => new Set(tracked), [tracked]);
   const report = useMemo(() => buildLifeReport({ journal, lifeLog, span, tracked }), [journal, lifeLog, span, tracked]);
+  const calendar = useMemo<HeatCell[]>(() => report.daily.map((day): HeatCell => ({
+    date: day.date,
+    hours: day.hasLife ? 1 : 0,
+    level: day.hasLife ? 3 : 0,
+  })).reverse(), [report.daily]);
   const links = useMemo(() => factorLinks(lifeLog, journal, span, tracked), [lifeLog, journal, span, tracked]);
   const seriesOptions = (Object.keys(SERIES_META) as Series[]).filter((s) => {
     const f = SERIES_META[s].field;
@@ -388,6 +400,17 @@ export function LifeReportPanel({
         )}
       </div>
 
+      {trackedSet.has("sleep") && <SleepRhythm lifeLog={lifeLog} span={span} format={timeFormat} target={sleepTarget} onEdit={onEdit} />}
+      <Card className="p-4 sm:p-6">
+        <h3 className="font-display text-lg font-bold text-paper">Logging consistency</h3>
+        <p className="mt-1 text-xs text-paper/65">{report.coverage.life} of {report.days} days with a Life Dashboard entry. See Daily detail below to review a date.</p>
+        <div className="mt-4" aria-hidden="true">
+          <Heatmap cells={calendar} legendLow="No entry" legendHigh="Entry" legendLevels={[0, 3]} formatTooltip={(day) => ({
+            primary: formatDate(day.date),
+            secondary: day.hours ? "Life Dashboard entry" : "No entry",
+          })} />
+        </div>
+      </Card>
       <Card className="flex flex-wrap items-center gap-x-6 gap-y-2 px-5 py-3.5 text-[0.78rem] text-paper/65">
         <span>
           <span className="tabular font-semibold text-paper">{report.coverage.journal}</span> of {report.days} days in the journal

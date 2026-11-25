@@ -30,6 +30,7 @@ export function Heatmap({
   formatTooltip,
   legendLow = "Less",
   legendHigh = "More",
+  legendLevels = [0, 1, 2, 3, 4],
 }: {
   cells: HeatCell[];
   className?: string;
@@ -44,6 +45,7 @@ export function Heatmap({
   formatTooltip?: (cell: HeatCell) => { primary: string; secondary: string };
   legendLow?: string;
   legendHigh?: string;
+  legendLevels?: HeatCell["level"][];
 }) {
   const [hover, setHover] = useState<{
     cell: HeatCell;
@@ -201,10 +203,10 @@ export function Heatmap({
       {/* Legend */}
       <div className="mt-3 flex items-center gap-1.5 text-[0.6rem] text-paper/40">
         <span>{legendLow}</span>
-        {LEVEL_BG.map((bg, i) => (
+        {legendLevels.map((i) => (
           <span
             key={i}
-            className={cn("h-2.5 w-2.5 rounded-[3px]", bg)}
+            className={cn("h-2.5 w-2.5 rounded-[3px]", LEVEL_BG[i])}
           />
         ))}
         <span>{legendHigh}</span>

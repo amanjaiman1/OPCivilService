@@ -201,3 +201,27 @@ findings when they weren't.
 │  GO DEEPER: sleep · running · weight · screen time                │
 └──────────────────────────────────────────────────────────────────┘
 ```
+
+### Morning check-in and sleep rhythm
+
+The check-in shows **Last night** and **Today morning** with dates. A fresh
+morning form suggests the local wake-up time until 15:00. It preserves saved
+times and writes only when submitted. Before saving, the time from bedtime to
+wake-up is labelled *time in bed*. Enter actual hours or choose minutes awake
+to report time asleep. The correction never changes either clock time. A
+duration derived from both times remains an estimate, and a later bedtime never
+subtracts sleep on its own.
+
+The report's overnight timeline follows the selected 7-, 30-, 90-day or custom
+range. A bar covers the local clock interval from bed to wake, with elapsed
+time printed below. Separate markers show incomplete or invalid intervals.
+The average of separately reported sleep uses only independently entered
+duration readings. New reads preserve whether the duration was reported or estimated, even when
+the numbers are equal. Historical records with hours identical to the derived
+interval cannot identify their original source and are treated as estimates.
+When both schedule targets are configured, adherence shows the number of
+plausible nights within 30 minutes of each target over the nights with both
+times. Other metric comparisons require at least three observations in each
+period for tracked wellbeing metrics except weight, which shows change
+between two readings. Logging consistency counts dates with a Life entry,
+including a date with a recorded zero, regardless of how many fields were filled.

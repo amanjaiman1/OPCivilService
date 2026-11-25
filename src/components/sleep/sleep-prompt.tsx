@@ -1,12 +1,10 @@
 "use client";
 
-import { Sunrise } from "lucide-react";
 import { useChronicle } from "@/lib/store";
 import { Logo } from "@/components/layout/logo";
-import { Button } from "@/components/ui/button";
-import { formatClock, nightLabel, timeFormatOf } from "@/lib/sleep";
+import { nightLabel } from "@/lib/sleep";
 import { toISODate } from "@/lib/utils";
-import { SleepEditor, useSleepQuickActions } from "./sleep-editor";
+import { SleepEditor } from "./sleep-editor";
 import { FullScreen } from "./sleep-gate";
 
 /* The morning check-in itself, downloaded only on the mornings it is
@@ -28,12 +26,8 @@ function greeting(hour: number): string {
  * the same card any time.
  */
 export function SleepPrompt({ promptKey }: { promptKey: string }) {
-  const lastNight = useChronicle((s) => s.lifeLog.find((l) => l.date === toISODate(new Date())));
-  const profile = useChronicle((s) => s.profile);
   const dismissSleepPrompt = useChronicle((s) => s.dismissSleepPrompt);
-  const quick = useSleepQuickActions();
-  const format = timeFormatOf(profile);
-  const today = quick.today;
+  const today = toISODate(new Date());
   const hour = new Date().getHours();
 
   return (
@@ -51,18 +45,6 @@ export function SleepPrompt({ promptKey }: { promptKey: string }) {
           </h1>
           <p className="mt-1 text-sm text-paper/60">The night of {nightLabel(today)}</p>
         </div>
-
-        {quick.canWakeNow && lastNight?.bedtime && (
-          <div className="mt-6 rounded-2xl border border-accent/25 bg-accent/[0.06] p-4 text-center">
-            <p className="text-sm text-paper/75">
-              You went to bed at <span className="font-semibold text-paper">{formatClock(lastNight.bedtime, format)}</span>.
-            </p>
-            <Button size="lg" className="mt-3 w-full" onClick={() => quick.wakeNow(promptKey)}>
-              <Sunrise className="h-4 w-4" /> I woke up now · {formatClock(quick.nowClock, format)}
-            </Button>
-            <p className="mt-2 text-[0.72rem] text-paper/55">Or set the times below.</p>
-          </div>
-        )}
 
         <div className="mt-6">
           <SleepEditor date={today} variant="gate" promptKey={promptKey} />

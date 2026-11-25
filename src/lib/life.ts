@@ -892,7 +892,7 @@ function observationsFor(
     out.push({
       id: "bedtime",
       tone: "attention",
-      text: `Your bedtime moved by about ${spread.value} minutes either way. A steadier bedtime usually makes mornings easier to plan.`,
+      text: `Your recorded bedtimes varied by about ${spread.value} minutes either way.`,
       basis: `${spread.recorded} nights with a bedtime recorded.`,
     });
   }
@@ -923,7 +923,9 @@ export function buildLifeReport(input: {
       const rows = now.life.filter((e) => typeof e.weightKg === "number").sort((a, b) => a.date.localeCompare(b.date));
       previous = rows.length >= 2 ? rows[0].weightKg! : null;
     } else {
-      previous = spec.measure(before)[0];
+      const [priorValue, priorRecorded] = spec.measure(before);
+      const minimum = spec.field ? 3 : 1;
+      previous = recorded >= minimum && priorRecorded >= minimum ? priorValue : null;
     }
     const change =
       value != null && previous != null ? round(value - previous, Math.max(1, spec.decimals)) : null;

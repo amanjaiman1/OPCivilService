@@ -16,7 +16,7 @@ import {
   legacyThemeMode,
   themeModeFromSurface,
 } from "./theme";
-import { hoursFromTimes, isClock, MAX_SLEEP_HOURS } from "./sleep";
+import { checkSleep, hoursFromTimes, isClock, MAX_SLEEP_HOURS, nightOf } from "./sleep";
 import { pruneFiles } from "./files";
 import {
   type ChildPolicy,
@@ -462,6 +462,7 @@ interface ChronicleState extends ChronicleData {
     bedtime?: string | null;
     wakeTime?: string | null;
     hours?: number | null;
+    deriveHours?: boolean;
     quality?: number | null;
     /** Also mark the morning check-in as answered for this key. */
     promptKey?: string;
@@ -1823,7 +1824,7 @@ export const useChronicle = create<ChronicleState>()(
       logDailySleep: ({ date, promptKey, sleepTime, wakeTime, sleepHours }) =>
         get().recordSleep({ date, promptKey, bedtime: sleepTime, wakeTime, hours: sleepHours }),
 
-      recordSleep: ({ date, bedtime, wakeTime, hours, quality, promptKey }) =>
+      recordSleep: ({ date, bedtime, wakeTime, hours, deriveHours, quality, promptKey }) =>
         set((s) => {
           const existing = s.lifeLog.find((l) => l.date === date);
           const next: LifeEntry = { ...(existing ?? { id: `life-${date}`, date }), id: `life-${date}`, date };
@@ -1835,17 +1836,34 @@ export const useChronicle = create<ChronicleState>()(
           if (wakeTime === null) delete next.wakeTime;
           else if (isClock(wakeTime)) next.wakeTime = wakeTime;
 
-          if (hours === null) delete next.sleepHours;
-          else if (typeof hours === "number" && Number.isFinite(hours) && hours > 0 && hours <= MAX_SLEEP_HOURS) {
+          if (!next.bedtime && !next.wakeTime) delete next.sleepTimezone;
+          else if (timesChanged && !next.sleepTimezone && (next.bedtime !== existing?.bedtime || next.wakeTime !== existing?.wakeTime)) {
+            next.sleepTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+          }
+          const changed = next.bedtime !== existing?.bedtime || next.wakeTime !== existing?.wakeTime;
+          const interval = checkSleep(date, next.bedtime, next.wakeTime, next.sleepTimezone);
+          if (changed && next.bedtime && next.wakeTime && !interval.ok) return s;
+          if (hours === null) {
+            delete next.sleepHours;
+            delete next.sleepHoursSource;
+          }
+          else if (typeof hours === "number" && Number.isFinite(hours) && hours > 0 && hours <= MAX_SLEEP_HOURS &&
+              (!interval.ok || Math.round(hours * 60) <= interval.minutes || hours === existing?.sleepHours)) {
             next.sleepHours = Math.round(hours * 100) / 100;
-          } else if (timesChanged) {
+            next.sleepHoursSource = "reported";
+          } else if (deriveHours || (changed && hours === undefined && !(existing && nightOf(existing)?.manualHours))) {
             // From the times when both are known. Hours worked out from times
             // that are now incomplete go with them; hours that were entered
             // without times (older records) stay.
-            const derived = hoursFromTimes(date, next.bedtime, next.wakeTime);
+            const derived = hoursFromTimes(date, next.bedtime, next.wakeTime, next.sleepTimezone);
             const hadBoth = isClock(existing?.bedtime) && isClock(existing?.wakeTime);
-            if (derived !== undefined) next.sleepHours = derived;
-            else if (hadBoth) delete next.sleepHours;
+            if (derived !== undefined) {
+              next.sleepHours = derived;
+              next.sleepHoursSource = "estimated";
+            } else if (hadBoth) {
+              delete next.sleepHours;
+              delete next.sleepHoursSource;
+            }
           }
 
           if (quality === null) delete next.sleepQuality;

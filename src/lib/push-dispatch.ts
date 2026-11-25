@@ -18,6 +18,7 @@ import {
   type NotifyState,
   type Notice,
 } from "./notifications";
+import { bedtimeNowNight } from "./sleep";
 import { isValidTimeZone, pickTimeZone, zonedNow, zonedDayAndHour } from "./zoned-time";
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -88,6 +89,8 @@ export interface PushPayload {
    * The payload is encrypted to the device, so this never travels in the clear.
    */
   account?: string;
+  bedtimeToken?: string;
+  bedtimeEndpointHash?: string;
 }
 
 export type UserDecision =
@@ -96,6 +99,7 @@ export type UserDecision =
       send: true;
       /** Digest sends one summary; otherwise one notice. */
       digest: boolean;
+      bedtime?: { night: string; timezone: string };
       notices: Notice[];
       payload: PushPayload;
       /** Fold this back into `chronicle_push_log` after a successful send. */
@@ -166,10 +170,8 @@ export function decideForUser(
    * otherwise the one the devices report; UTC only when neither exists.
    */
   const profileZone = snapshot.profile?.timezone;
-  const tz =
-    (isValidTimeZone(profileZone) ? (profileZone as string) : null) ??
-    pickTimeZone(rows.map((r) => r.timezone)) ??
-    "UTC";
+  const knownZone = (isValidTimeZone(profileZone) ? profileZone : null) ?? pickTimeZone(rows.map((row) => row.timezone));
+  const tz = knownZone ?? "UTC";
   const now = zonedNow(tz, at);
   const { date: today } = zonedDayAndHour(tz, at);
 
@@ -210,7 +212,30 @@ export function decideForUser(
   const notices = evaluate(data, { now, settings, roadmapKnown: Array.isArray(snapshot.plans) });
   const inbox = buildInbox(notices, snapshot.notifyState, today);
   // `now` for the calendar, `at` for the minimum gap, which is a duration.
-  const plan = planDelivery(inbox, settings, log, now, at);
+  const ordinary = planDelivery(inbox, settings, log, now, at);
+  const night = knownZone && now.getHours() >= 21 ? bedtimeNowNight(now) : null;
+  const bedtime = night && !settings.mutedCategories.includes("life") &&
+    !settings.mutedRules.includes("bedtime-reminder") &&
+    !data.lifeLog.some((entry) => entry.date === night && (entry.bedtime || entry.wakeTime)) &&
+    !data.journal.some((entry) => entry.date === night && (entry.sleepTime || entry.wakeTime))
+    ? {
+      id: `bedtime-reminder:${night}`,
+      dedupeKey: "bedtime-reminder",
+      ruleId: "bedtime-reminder",
+      category: "life",
+      priority: "normal",
+      title: "Ready to call it a day?",
+      body: "Record your bedtime before you rest.",
+      href: "/wellbeing?sleep=reminder#sleep-card-title",
+      cta: "Open sleep",
+    } satisfies Notice
+    : null;
+  // Keep critical notifications ahead of the bedtime shortcut.
+  const nightly = bedtime && !(ordinary.kind !== "none" && ordinary.notices[0]?.priority === "critical")
+    ? planDelivery(buildInbox([bedtime], snapshot.notifyState, today), { ...settings, digest: false }, log, now, at)
+    : null;
+  const sendBedtime = nightly?.kind === "individual" && night !== null;
+  const plan = sendBedtime ? nightly : ordinary;
 
   if (plan.kind === "none") return { send: false, reason: plan.reason };
 
@@ -233,6 +258,7 @@ export function decideForUser(
   return {
     send: true,
     digest,
+    ...(sendBedtime ? { bedtime: { night, timezone: tz } } : {}),
     notices: plan.notices,
     payload: base,
     nextLog: foldLog(log, plan.notices, at, today, digest),

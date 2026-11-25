@@ -206,13 +206,15 @@ test("recording a night keeps every other reading on that day", () => {
     fileIds: ["f1"],
     bedtime: "23:30",
     wakeTime: "07:00",
+    sleepTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
     sleepHours: 7.5,
+    sleepHoursSource: "estimated",
   });
 });
 
 test("a bedtime can be saved first and the wake-up added later", () => {
   store().recordSleep({ date: D, bedtime: "23:10" });
-  assert.deepEqual(store().lifeLog[0], { id: `life-${D}`, date: D, bedtime: "23:10" }, "no hours invented");
+  assert.deepEqual(store().lifeLog[0], { id: `life-${D}`, date: D, bedtime: "23:10", sleepTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC" }, "no hours invented");
   store().recordSleep({ date: D, wakeTime: "06:40" });
   assert.equal(store().lifeLog[0].sleepHours, 7.5);
   assert.equal(store().lifeLog[0].bedtime, "23:10", "the bedtime stays");
@@ -292,4 +294,21 @@ test("Reduce transparency is its own setting: it never changes the theme, and th
   store().setReduceTransparency(true);
   useChronicle.setState(blankChronicleState());
   assert.equal(store().reduceTransparency, false);
+});
+
+test("a recorded IANA zone preserves elapsed duration after travel and rejects a skipped clock reading", () => {
+  assert.equal(sleepMinutes("2026-03-08", "23:30", "07:00", "America/New_York"), 390);
+  assert.equal(sleepMinutes("2026-11-01", "23:30", "07:00", "America/New_York"), 510);
+  assert.equal(sleepMinutes("2026-03-08", "02:30", "07:00", "America/New_York"), null);
+  assert.equal(checkSleep("2026-03-08", "02:30", "07:00", "America/New_York").ok, false);
+});
+
+
+test("an explicitly reported duration can equal time in bed without becoming an estimate", () => {
+  store().recordSleep({ date: D, bedtime: "23:30", wakeTime: "07:00", hours: 7.5 });
+  const saved = store().lifeLog[0];
+  assert.equal(saved.sleepHoursSource, "reported");
+  assert.equal(nightOf(saved)?.manualHours, true);
+  store().recordSleep({ date: D, quality: 4 });
+  assert.equal(store().lifeLog[0].sleepHoursSource, "reported");
 });

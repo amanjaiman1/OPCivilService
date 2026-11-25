@@ -523,6 +523,62 @@ Capture button to visible dialog (ms, first/next/next): ${timings.join(", ")}`);
   await waitFor("confirmed bedtime in the cloud", async () => (await lifeDayOf(student.email, nightDate))?.bedtime === "22:25");
 }
 
+async function phaseThree(page, student) {
+  await page.setViewportSize({ width: 1440, height: 960 });
+  const evening = new Date();
+  evening.setHours(23, 30, 0, 0);
+  await page.clock.setFixedTime(evening);
+  await signUp(page, student.name, student.email);
+  await onboard(page, student.name);
+  await passSleepPromptIfShown(page);
+  await passTourIfShown(page);
+  await page.goto(`${APP}/wellbeing?sleep=reminder`);
+  await page.getByText("Bedtime reminder", { exact: true }).waitFor();
+  await page.getByTestId("sleep-card").getByRole("button", { name: /Going to bed now/ }).click();
+
+  const morning = new Date(evening);
+  morning.setDate(morning.getDate() + 1);
+  morning.setHours(7, 0, 0, 0);
+  const night = morning.toLocaleDateString("en-CA");
+  await waitFor("bedtime without wake-up", async () => {
+    const row = await lifeDayOf(student.email, night);
+    return row?.bedtime === "23:30" && !row.wakeTime && row.sleepHours === undefined;
+  });
+  await page.clock.setFixedTime(morning);
+  await page.reload();
+  const checkIn = page.getByTestId("sleep-prompt");
+  await checkIn.getByRole("button", { name: /Last night · Went to bed: 11:30 PM|Last night · Went to bed: 23:30/i }).waitFor();
+  await checkIn.getByRole("button", { name: /Today morning · Woke up: 7:00 AM|Today morning · Woke up: 07:00/i }).waitFor();
+  check(!(await lifeDayOf(student.email, night))?.wakeTime, "opening check-in persisted the suggested wake-up");
+  await checkIn.getByRole("button", { name: "30 min awake", exact: true }).click();
+  await checkIn.getByText("30m awake · 7h asleep").waitFor();
+  const evidence = process.env.OPC_PHASE_EVIDENCE;
+  await page.setViewportSize({ width: 390, height: 844 });
+  if (evidence) await checkIn.screenshot({ path: join(evidence, "morning-check-in.png") });
+  await checkIn.getByTestId("sleep-save").click();
+  await checkIn.waitFor({ state: "detached" });
+  await waitFor("corrected actual sleep", async () => {
+    const row = await lifeDayOf(student.email, night);
+    return row?.sleepHours === 7 && row.bedtime === "23:30" && row.wakeTime === "07:00";
+  });
+  await page.goto(`${APP}/wellbeing`);
+  const rhythm = page.locator("section").filter({ has: page.getByRole("heading", { name: "Sleep rhythm" }) }).first();
+  await rhythm.getByText(/7h 30m in bed · 7h reported asleep/).waitFor();
+  check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "Life Dashboard overflows on mobile");
+  if (evidence) {
+    await page.getByRole("heading", { name: "Sleep rhythm" }).locator("../..").locator("..").screenshot({ path: join(evidence, "rhythm-mobile.png") });
+    await page.evaluate(() => document.querySelector("main")?.scrollTo({ top: 0, behavior: "instant" }));
+    await page.screenshot({ path: join(evidence, "life-mobile.png") });
+    await page.setViewportSize({ width: 1440, height: 960 });
+    await page.evaluate(() => document.querySelector("main")?.scrollTo({ top: 0, behavior: "instant" }));
+    await page.screenshot({ path: join(evidence, "life-desktop.png") });
+    await page.goto(`${APP}/wellbeing/sleep`);
+    await page.getByTestId("sleep-history").waitFor();
+    check(await page.getByText("Days on target", { exact: true }).count() === 0, "a missing personal sleep target displayed target adherence");
+    await page.screenshot({ path: join(evidence, "sleep-details.png") });
+  }
+}
+
 /* ── run ───────────────────────────────────────────────────────── */
 
 async function main() {
@@ -543,6 +599,12 @@ async function main() {
   const ids = {};
 
   try {
+    if (process.argv.includes("--phase-03")) {
+      await scenario("Phase 03 sleep and wellbeing", () => phaseThree(page, A));
+      await browser.close();
+      return;
+    }
+
     if (process.argv.includes("--phase-02")) {
       await scenario("Phase 02 Capture and contextual guidance", () => phaseTwo(page, A));
       await browser.close();

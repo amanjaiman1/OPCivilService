@@ -76,8 +76,8 @@ export function draftFromEntry(date: ISODate, entry?: LifeEntry): LifeDraft {
   }
   // Hours that are simply bedtime to wake-up aren't a separate answer: the box
   // is for time asleep when it differs, so it starts empty.
-  const fromTimes = entry ? sleepMinutes(entry.date, entry.bedtime, entry.wakeTime) : null;
-  if (fromTimes != null && typeof entry?.sleepHours === "number" && Math.abs(entry.sleepHours * 60 - fromTimes) <= 2) {
+  const fromTimes = entry ? sleepMinutes(entry.date, entry.bedtime, entry.wakeTime, entry.sleepTimezone) : null;
+  if (entry?.sleepHoursSource !== "reported" && fromTimes != null && typeof entry?.sleepHours === "number" && Math.abs(entry.sleepHours * 60 - fromTimes) <= 2) {
     numbers.sleepHours = "";
   }
   return {
@@ -136,14 +136,24 @@ export function entryFromDraft(
   }
   if (isClock(draft.bedtime)) entry.bedtime = draft.bedtime;
   if (isClock(draft.wakeTime)) entry.wakeTime = draft.wakeTime;
+  const timesChanged = entry.bedtime !== existing?.bedtime || entry.wakeTime !== existing?.wakeTime;
+  if (entry.bedtime || entry.wakeTime) {
+    entry.sleepTimezone = existing?.sleepTimezone ?? (timesChanged ? Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC" : undefined);
+  }
   if (entry.bedtime && entry.wakeTime) {
-    const check = checkSleep(draft.date, entry.bedtime, entry.wakeTime);
+    const check = checkSleep(draft.date, entry.bedtime, entry.wakeTime, entry.sleepTimezone);
     if (!check.ok) errors.sleepTimes = check.message;
+    else if (entry.sleepHours != null && Math.round(entry.sleepHours * 60) > check.minutes &&
+      (timesChanged || entry.sleepHours !== existing?.sleepHours)) errors.sleepHours = "Actual sleep cannot exceed time in bed.";
   }
   // No time asleep typed: the night's length is bedtime to wake-up.
+  if (entry.sleepHours != null) entry.sleepHoursSource = "reported";
   if (entry.sleepHours == null && !errors.sleepHours && !errors.sleepTimes) {
-    const h = sleepFromTimes(draft);
-    if (h != null) entry.sleepHours = h;
+    const h = hoursFromTimes(draft.date, entry.bedtime, entry.wakeTime, entry.sleepTimezone);
+    if (h != null) {
+      entry.sleepHours = h;
+      entry.sleepHoursSource = "estimated";
+    }
   }
   if (draft.exerciseType) entry.exerciseType = draft.exerciseType;
   const note = draft.note.trim().slice(0, 280);
