@@ -118,6 +118,7 @@ html[data-surface="emerald-liquid-glass"] :is(
 }
 
 html[data-surface="emerald-liquid-glass"] .flap {
+  color: rgb(var(--paper));
   --flap-from: 255 255 255;
   --flap-to: 225 225 225;
   --flap-glow: 190 190 190;
