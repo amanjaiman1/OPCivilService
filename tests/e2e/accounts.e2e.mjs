@@ -379,12 +379,12 @@ async function phaseTwo(page, student) {
   await page.setViewportSize({ width: 1440, height: 960 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   const home = page.url();
-  const round = await trigger.locator("svg").evaluate((glyph) => {
-    const element = glyph.parentElement;
-    const { width, height } = element.getBoundingClientRect();
-    return width === height && parseFloat(getComputedStyle(element).borderTopLeftRadius) >= width / 2;
-  });
-  check(round, "the desktop Capture disc is not circular");
+  const dock = page.getByRole("navigation", { name: "Quick actions" });
+  const desktopEntry = await dock.getByRole("button", { name: "Log today’s progress" }).boundingBox();
+  const rail = page.getByRole("navigation", { name: "Global actions" });
+  check(desktopEntry && Math.abs(desktopEntry.x + desktopEntry.width / 2 - 720) <= 1, "desktop Capture is centered");
+  check(!(await rail.getByRole("link", { name: "Home", exact: true }).count()), "Home is still in the desktop rail");
+  check(!(await rail.getByRole("button", { name: "Log today’s progress" }).count()), "Capture is still in the desktop rail");
   await trigger.click();
   await workspace.waitFor();
   check(page.url() === home, "opening from Home changed the address");

@@ -8,7 +8,7 @@ import { NavRail } from "./nav-rail";
 import { RouteTransition } from "./route-transition";
 import { PageTransition } from "./page-transition";
 import { Topbar } from "./topbar";
-import { MobileDock } from "./bottom-nav";
+import { QuickActionsDock } from "./bottom-nav";
 import { CaptureProvider } from "@/components/capture/capture-provider";
 import { hasOpenOverlay } from "@/components/ui/modal";
 import { FileJanitor } from "@/components/attachments/file-janitor";
@@ -49,8 +49,8 @@ const EASE = [0.22, 1, 0.36, 1] as const;
  *            navigation never crowd a smaller screen
  *   page     a floating search bar above the stage the page sits in
  *
- * On a phone: a top bar, an edge-to-edge page, a floating dock for quick
- * actions, and the full sidebar behind the menu.
+ * A floating dock holds quick actions on every screen size. On a phone, the
+ * page runs edge to edge and the sidebar opens from the top bar.
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const desktop = useMatchMedia("(min-width: 1024px)");
@@ -167,7 +167,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     // account may open (lib/features.ts) and what the team has sent it.
     <FeatureAccessScope accountId={accountId}>
     <PlatformInbox userId={mode === "cloud" ? (user?.id ?? null) : null}>
-    <HelpFeedback enabled={help} desktop={desktop}>
+    <HelpFeedback enabled={help}>
     <DemoChrome>
     <NotificationsProvider>
       <MotionConfig reducedMotion="user">
@@ -283,20 +283,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Topbar desktop={desktop} onOpenDrawer={() => setDrawerOpen(true)} onOpenPalette={openPalette} />
               <main className="app-stage no-scrollbar relative min-h-0 flex-1 overflow-y-auto">
                 {/* Bottom padding clears the phone's dock. */}
-                <div className="mx-auto w-full max-w-[1480px] px-4 pb-[calc(var(--bottom-nav-h,0px)+1.5rem)] pt-3 sm:px-6 lg:px-8 lg:pb-10 lg:pt-8 2xl:px-10">
+                <div className="mx-auto w-full max-w-[1480px] px-4 pb-[calc(var(--bottom-nav-h,0px)+1.5rem)] pt-3 sm:px-6 lg:px-8 lg:pb-[max(2.5rem,calc(var(--bottom-nav-h,0px)+1.5rem))] lg:pt-8 2xl:px-10">
                   {demo && <DemoBar />}
                   <TeamBanner />
                   <PageTransition>
                     <FeatureGate>{children}</FeatureGate>
                   </PageTransition>
                   {demo && <DemoGuideSpace />}
-                  {/* Room at the end of the page, so the Help & feedback button never covers the last line. */}
-                  {help && <div aria-hidden className="hidden h-8 shrink-0 lg:block" />}
                 </div>
               </main>
             </div>
 
-            <MobileDock />
+            <QuickActionsDock />
             {mode === "cloud" && user && <ReviewInvitation key={user.id} userId={user.id}
               blocked={drawerOpen || paletteOpen || appearanceOpen || flyoutOpen} />}
             {demo ? <DemoGuide /> : <FileJanitor />}

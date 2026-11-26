@@ -5,7 +5,6 @@ import { warmOverlays } from "./overlays";
 import { usePathname } from "next/navigation";
 import {
   ChevronRight,
-  House,
   BedDouble,
   Sunrise,
   Palette,
@@ -20,7 +19,6 @@ import { AccountMenu } from "@/components/account/account-menu";
 import { NotificationCentre } from "@/components/notifications/centre";
 import { Logo } from "./logo";
 
-import { CaptureTrigger } from "@/components/capture/capture-trigger";
 import { useFeatureAccess } from "@/components/features/feature-access";
 import { canAccessFeature } from "@/lib/features";
 import { useSleepQuickActions } from "@/components/sleep/sleep-editor";
@@ -148,13 +146,11 @@ export function NavRail({
         </button>
       </div>
 
-      <div className="mt-6 flex flex-col items-center gap-3">
-        {canAccessFeature(access, "dashboard") && (
-          <RailLink href="/dashboard" label="Home" icon={House} active={isActivePath(pathname, "/dashboard")} />
-        )}
-        <CaptureTrigger />
-        {mode !== "demo" && canAccessFeature(access, "life") && <SleepRailAction />}
-      </div>
+      {mode !== "demo" && canAccessFeature(access, "life") && (
+        <div className="mt-6">
+          <SleepRailAction />
+        </div>
+      )}
 
       <div className="flex-1" />
 

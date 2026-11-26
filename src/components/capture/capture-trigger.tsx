@@ -2,43 +2,30 @@
 
 import styles from "./capture-trigger.module.css";
 import { Plus } from "lucide-react";
-import { Tooltip } from "@/components/ui/tooltip";
 import { useCapture } from "./capture-provider";
 import { cn } from "@/lib/utils";
 import type { CaptureTarget } from "@/lib/capture-routing";
 
-export function CaptureTrigger({ mobile = false }: { mobile?: boolean }) {
+export function CaptureTrigger() {
   const capture = useCapture();
   if (!capture.available) return null;
-  const button = (
+  return (
     <button
       type="button"
       aria-label="Log today’s progress"
       aria-haspopup="dialog"
       aria-expanded={capture.opened}
       aria-keyshortcuts="Alt+N"
-      title={mobile ? "Log today’s progress" : undefined}
+      title="Log today’s progress (Alt+N)"
       onClick={() => capture.open()}
       onPointerEnter={capture.prepare}
       onFocus={capture.prepare}
-      className={cn(styles.trigger, mobile ? styles.mobile : styles.rail)}
+      className={styles.trigger}
     >
-      {mobile ? (
-        <>
-          <Plus className={styles.plus} strokeWidth={2.5} aria-hidden />
-          <span className={styles.mobileLabel}>Log entry</span>
-        </>
-      ) : (
-        <>
-          <span className={styles.disc} aria-hidden="true">
-            <Plus className={styles.plus} strokeWidth={2.5} />
-          </span>
-          <span className={styles.label}>Log today’s progress</span>
-        </>
-      )}
+      <Plus className={styles.plus} strokeWidth={2.5} aria-hidden />
+      <span className={styles.label}>Log entry</span>
     </button>
   );
-  return mobile ? button : <Tooltip content="Log today’s progress (Alt+N)" describe={false}>{button}</Tooltip>;
 }
 
 export function CaptureSectionButton({ target, className, children, nested }: {

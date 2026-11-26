@@ -12,7 +12,7 @@ import { isActivePath } from "@/lib/nav";
 import { AppLink } from "./app-link";
 import styles from "./bottom-nav.module.css";
 
-export function MobileDock() {
+export function QuickActionsDock() {
   const { available } = useCapture();
   const access = useFeatureAccess();
   const help = useHelpFeedback();
@@ -23,14 +23,14 @@ export function MobileDock() {
   useEffect(() => {
     if (!visible) return;
     const root = document.documentElement;
-    root.dataset.mobileDock = "true";
-    return () => { delete root.dataset.mobileDock; };
+    root.dataset.quickActionsDock = "true";
+    return () => { delete root.dataset.quickActionsDock; };
   }, [visible]);
 
   if (!visible) return null;
 
   return (
-    <nav aria-label="Quick actions" className={`${styles.wrap} pointer-events-none fixed inset-x-0 z-30 flex justify-center lg:hidden`}>
+    <nav aria-label="Quick actions" className={`${styles.wrap} pointer-events-none fixed inset-x-0 z-30 flex items-center justify-center`}>
       <div className={`${styles.dock} ${available ? "" : styles.compact}`}>
         {home && (
           <AppLink
@@ -42,7 +42,7 @@ export function MobileDock() {
             <House aria-hidden className={styles.house} />
           </AppLink>
         )}
-        {available && <CaptureTrigger mobile />}
+        {available && <CaptureTrigger />}
         {help && (
           <button
             type="button"
