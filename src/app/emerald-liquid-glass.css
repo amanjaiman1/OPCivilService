@@ -88,6 +88,7 @@
     inset -1px -1px 0 rgb(255 255 255 / 0.09),
     inset 0 -8px 11px -11px rgb(255 255 255 / 0.54),
     0 5px 12px -8px rgb(var(--shadow) / 0.68);
+  --select-sheen: var(--emerald-glass-sheen);
   --lg-fill: rgb(255 255 255 / 0.065);
   --lg-fill-hover: rgb(255 255 255 / 0.12);
   --lg-border: rgb(240 255 241 / 0.3);
