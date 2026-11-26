@@ -2067,9 +2067,19 @@ button:is(.rounded-md, .rounded-lg, .rounded-xl, .rounded-full).place-items-cent
 }
 
 
-@media (max-width: 1023px) {
-  html[data-mobile-capture] {
-    --bottom-nav-h: calc(3.5rem + max(0.875rem, env(safe-area-inset-bottom)));
+:root {
+  --quick-actions-height: 5rem;
+  --quick-actions-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+html[data-quick-actions-dock] {
+  --bottom-nav-h: calc(var(--quick-actions-height) + var(--quick-actions-bottom));
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --quick-actions-height: 5.625rem;
+    --quick-actions-bottom: max(1rem, env(safe-area-inset-bottom));
   }
 }
 

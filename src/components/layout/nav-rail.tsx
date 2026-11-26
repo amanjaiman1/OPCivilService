@@ -19,7 +19,6 @@ import { AccountMenu } from "@/components/account/account-menu";
 import { NotificationCentre } from "@/components/notifications/centre";
 import { Logo } from "./logo";
 
-import { CaptureTrigger } from "@/components/capture/capture-trigger";
 import { useFeatureAccess } from "@/components/features/feature-access";
 import { canAccessFeature } from "@/lib/features";
 import { useSleepQuickActions } from "@/components/sleep/sleep-editor";
@@ -115,23 +114,25 @@ export function NavRail({
 }) {
   const pathname = usePathname();
   const access = useFeatureAccess();
-  const { mode } = useAccount();
+  const { mode, user } = useAccount();
 
   return (
     <nav
       aria-label="Global actions"
       className="chrome-glass relative flex h-full w-[4.75rem] shrink-0 flex-col items-center rounded-[1.75rem] py-4"
     >
-      <Link
-        href="/dashboard"
-        aria-label="DoOrDie — Home"
-        title="DoOrDie"
-        className="grid h-11 w-11 place-items-center rounded-2xl border border-line bg-card shadow-soft transition-transform duration-200 hover:-translate-y-px"
-      >
-        <Logo className="h-6 w-6" />
-      </Link>
+      {!user && (
+        <Link
+          href="/dashboard"
+          aria-label="DoOrDie — Home"
+          title="DoOrDie"
+          className="mb-4 grid h-11 w-11 place-items-center rounded-2xl border border-line bg-card shadow-soft transition-transform duration-200 hover:-translate-y-px"
+        >
+          <Logo className="h-6 w-6" />
+        </Link>
+      )}
 
-      <div className="relative mt-4">
+      <div className="relative">
         <AccountMenu placement="rail" />
         {/* The sidebar's handle, on the rail's edge beside the avatar. */}
         <button
@@ -147,10 +148,11 @@ export function NavRail({
         </button>
       </div>
 
-      <div className="mt-6 flex flex-col items-center gap-3">
-        <CaptureTrigger />
-        {mode !== "demo" && canAccessFeature(access, "life") && <SleepRailAction />}
-      </div>
+      {mode !== "demo" && canAccessFeature(access, "life") && (
+        <div className="mt-6">
+          <SleepRailAction />
+        </div>
+      )}
 
       <div className="flex-1" />
 

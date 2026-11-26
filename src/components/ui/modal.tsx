@@ -70,7 +70,7 @@ export function Modal({
   footer?: React.ReactNode;
   className?: string;
   /**
-   * `corner`: from a small screen up, it opens at the bottom right, just above
+   * `corner`: from a small screen up, it opens at the bottom right, above
    * the floating button that opened it, over a lighter scrim. On a phone it's
    * the usual sheet either way.
    */
@@ -151,7 +151,7 @@ export function Modal({
           className={cn(
             "fixed inset-0 z-50 flex items-end justify-center p-0",
             placement === "corner"
-              ? "sm:items-end sm:justify-end sm:pb-[calc(var(--bottom-nav-h,0px)+var(--help-fab-space,0px)+1.25rem)] sm:pr-5"
+              ? "sm:items-end sm:justify-end sm:pb-[calc(var(--bottom-nav-h,0px)+1.25rem)] sm:pr-5"
               : "sm:items-center sm:p-4",
           )}
           initial={{ opacity: 0 }}

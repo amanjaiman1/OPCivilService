@@ -1221,7 +1221,7 @@ async function helpScenarios(browser, people) {
     check(log.map((e) => e.action).join(",") === "crash.resolved" && log[0].actor_id === owner.id, `resolving is audited: ${log.map((e) => e.action)}`);
   });
 
-  await scenario("24. Help & feedback: a round button for signed-in students only, and a message goes straight to the Feedback Center", async () => {
+  await scenario("24. Help & feedback: a dock action for signed-in students only, and a message goes straight to the Feedback Center", async () => {
     // Not for visitors, on the public site or in the demo.
     const visitor = await (await browser.newContext()).newPage();
     for (const path of ["/", "/reviews", "/login"]) {
@@ -1238,17 +1238,25 @@ async function helpScenarios(browser, people) {
     check(!(await visitor.getByTestId("help-feedback-button").count()), "the demo has the button");
     await visitor.close();
 
-    // A signed-in student on a phone: the help button sits above the entry button.
+    // A signed-in student can reach all three actions from the same mobile dock.
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
     const page = await ctx.newPage();
     await signInUi(page, s4.email, "/dashboard");
     await page.waitForURL(`${APP}/dashboard`);
     await intoApp(page, s4);
-    const button = page.getByTestId("help-feedback-button");
-    await button.waitFor();
-    await page.waitForTimeout(800);
-    const [b, entry] = [await button.boundingBox(), await page.getByRole("button", { name: "Add entry", exact: true }).boundingBox()];
-    check(b && entry && b.y + b.height <= entry.y && b.x + b.width <= 390, `help overlaps entry: ${JSON.stringify({ b, entry })}`);
+    const dock = page.getByRole("navigation", { name: "Quick actions" });
+    const button = dock.getByTestId("help-feedback-button");
+    const home = dock.getByRole("link", { name: "Home" });
+    const entry = dock.getByRole("button", { name: "Log today’s progress", exact: true });
+    await entry.waitFor();
+    const [left, center, right] = await Promise.all([home.boundingBox(), entry.boundingBox(), button.boundingBox()]);
+    check(left && center && right && left.x >= 0 && right.x + right.width <= 390 &&
+      left.x + left.width <= center.x + 1 && center.x + center.width <= right.x + 1 &&
+      center.height > left.height && center.height > right.height, `dock layout: ${JSON.stringify({ left, center, right })}`);
+    await page.goto(`${APP}/journal`);
+    await home.click();
+    await page.waitForURL(`${APP}/dashboard`);
+    check((await home.getAttribute("aria-current")) === "page", "Home is marked current in the dock");
     await page.goto(`${APP}/journal`);
     await button.waitFor();
 
@@ -1290,23 +1298,28 @@ async function helpScenarios(browser, people) {
     await page.keyboard.press("Escape");
     await ctx.close();
 
-    // A laptop: the panel opens in the corner, above the button, which turns into its close button.
+    // A laptop: the wider dock sits at the bottom center and opens the same feedback panel.
     const wide = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const lap = await wide.newPage();
     await signInUi(lap, s4.email, "/dashboard");
     await lap.waitForURL(`${APP}/dashboard`);
     await intoApp(lap, s4);
-    const fab = lap.getByTestId("help-feedback-button");
-    await fab.click();
+    const desktopDock = lap.getByRole("navigation", { name: "Quick actions" });
+    const desktopHome = desktopDock.getByRole("link", { name: "Home", exact: true });
+    const desktopEntry = desktopDock.getByRole("button", { name: "Log today’s progress" });
+    const desktopHelp = desktopDock.getByTestId("help-feedback-button");
+    await desktopEntry.waitFor();
+    const [l, m, r] = await Promise.all([desktopHome.boundingBox(), desktopEntry.boundingBox(), desktopHelp.boundingBox()]);
+    check(l && m && r && center && m.height > center.height && l.x + l.width <= m.x + 1 &&
+      m.x + m.width <= r.x + 1 && Math.abs(m.x + m.width / 2 - 720) <= 1,
+      `desktop dock layout: ${JSON.stringify({ l, m, r })}`);
+    await desktopHelp.click();
     const panel = lap.getByRole("dialog", { name: "Help & feedback" });
     await panel.waitFor();
-    await lap.waitForTimeout(400);
-    const [p2, f2] = [await panel.boundingBox(), await fab.boundingBox()];
-    check(p2 && f2 && p2.x + p2.width > 1440 - 60 && p2.y + p2.height <= f2.y + 1, `the panel isn't above the button: ${JSON.stringify({ p2, f2 })}`);
     await lap.screenshot({ path: join(SHOTS, "help-laptop.png") });
-    check((await fab.getAttribute("aria-label")) === "Close Help & feedback", "the button closes it");
-    await fab.click();
+    await panel.getByRole("button", { name: "Close", exact: true }).click();
     await panel.waitFor({ state: "detached" });
+    check((await desktopHelp.getAttribute("aria-expanded")) === "false", "the dock action reflects that feedback closed");
     await wide.close();
 
     // The Admin Center has no button; its Feedback page has the message and the crash reports.

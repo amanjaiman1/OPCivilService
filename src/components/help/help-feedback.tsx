@@ -2,9 +2,7 @@
 
 /* ════════════════════════════════════════════════════════════════
    HELP & FEEDBACK
-   A small round button at the bottom right of every page of the app, for
-   signed-in accounts only: never on the public site, the sign-in screens,
-   the Admin Center, the demo, or a build without accounts. It opens a
+   Available from the quick actions dock for signed-in accounts. It opens a
    panel to send the team a bug report, an idea or a question (with a
    screenshot if it helps), to read their answers, and to switch automatic
    crash reports on or off.
@@ -15,11 +13,8 @@
    ════════════════════════════════════════════════════════════════ */
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
-import { Bug, MessageCircleQuestion, X } from "lucide-react";
+import { Bug } from "lucide-react";
 import { useChronicle } from "@/lib/store";
-import { useMounted } from "@/lib/hooks";
 import { FEEDBACK_MIN_LENGTH } from "@/lib/report";
 import { apiCall, ApiError } from "@/lib/platform/client";
 import type { MyFeedback } from "@/lib/platform/types";
@@ -30,7 +25,6 @@ import { Modal } from "@/components/ui/modal";
 import { Segmented, Skeleton } from "@/components/ui/misc";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import { EMPTY_DRAFT, FeedbackForm, technicalDetails, type FeedbackDraft, type FormState } from "./feedback-form";
 import { FeedbackHistory } from "./feedback-history";
 
@@ -39,15 +33,14 @@ export type HelpView = "send" | "messages";
 interface HelpValue {
   /** Opens the panel, on "Your messages" when the team has answered something unread, else on a new message. */
   open: (view?: HelpView) => void;
+  isOpen: boolean;
+  unseen: number;
 }
 
 const HelpContext = createContext<HelpValue | null>(null);
 
 /** Null where Help & feedback isn't offered: signed out, the demo, or a build without accounts. */
 export const useHelpFeedback = () => useContext(HelpContext);
-
-/** The room the button takes above the bottom edge, so toasts and prompts sit above it. */
-const FAB_SPACE = "4rem";
 
 type Sent = MyFeedback & { screenshot: "stored" | "failed" | null };
 
@@ -81,7 +74,7 @@ function HelpFeedbackOn({ children }: { children: React.ReactNode }) {
     setForm((f) => (f.kind === "sent" ? { kind: "editing", error: null } : f));
     setOpen(true);
   }, []);
-  const value = useMemo<HelpValue>(() => ({ open }), [open]);
+  const value = useMemo<HelpValue>(() => ({ open, isOpen, unseen }), [open, isOpen, unseen]);
 
   // A screenshot's preview is an object URL: let it go when the screenshot is replaced, removed or sent.
   const setDraft = useCallback((patch: Partial<FeedbackDraft>) => {
@@ -144,7 +137,6 @@ function HelpFeedbackOn({ children }: { children: React.ReactNode }) {
   return (
     <HelpContext.Provider value={value}>
       {children}
-      <HelpButton open={isOpen} unseen={unseen} onClick={() => (isOpen ? setOpen(false) : open())} />
       <Modal
         open={isOpen}
         onClose={() => setOpen(false)}
@@ -226,89 +218,7 @@ function CrashReportsSetting() {
   );
 }
 
-/**
- * The button: small, round, at the bottom right, above the phone's dock. It
- * pops in a moment after the page, glows softly a few times, keeps glowing
- * while a team answer is unread, and turns into a close button while the
- * panel is open. Nothing moves for anyone who asked for reduced motion.
- */
-function HelpButton({ open, unseen, onClick }: { open: boolean; unseen: number; onClick: () => void }) {
-  const mounted = useMounted();
-
-  useEffect(() => {
-    const root = document.documentElement;
-    root.style.setProperty("--help-fab-space", FAB_SPACE);
-    return () => {
-      root.style.removeProperty("--help-fab-space");
-    };
-  }, []);
-
-  if (!mounted) return null;
-  const label = unseen > 0 ? `Help & feedback: the team answered ${unseen === 1 ? "a message" : `${unseen} messages`}` : "Help & feedback";
-
-  return createPortal(
-    <motion.div
-      className={cn(
-        "fixed bottom-[calc(var(--bottom-nav-h,0px)+0.75rem)] right-4 z-40 sm:right-5 lg:bottom-5",
-        // Open: above the panel's scrim on a wider screen, as its close button; out of the sheet's way on a phone.
-        open && "max-sm:pointer-events-none max-sm:opacity-0 sm:z-[55]",
-      )}
-      initial={{ opacity: 0, scale: 0.5, y: 14 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      transition={{ type: "spring", stiffness: 420, damping: 24, delay: 0.5 }}
-    >
-      {!open && (
-        <span
-          aria-hidden
-          className={cn(
-            "pointer-events-none absolute inset-0 rounded-full bg-accent/40",
-            unseen > 0 ? "motion-safe:animate-help-halo-loop" : "motion-safe:animate-help-halo",
-          )}
-        />
-      )}
-      <motion.button
-        type="button"
-        onClick={onClick}
-        aria-label={open ? "Close Help & feedback" : label}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        data-testid="help-feedback-button"
-        whileHover={{ scale: 1.07 }}
-        whileTap={{ scale: 0.92 }}
-        transition={{ type: "spring", stiffness: 500, damping: 28 }}
-        className="group relative grid h-12 w-12 place-items-center rounded-full bg-accent text-accent-fg shadow-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/45 focus-visible:ring-offset-2 focus-visible:ring-offset-ink sm:h-[3.25rem] sm:w-[3.25rem]"
-      >
-        <AnimatePresence initial={false} mode="wait">
-          <motion.span
-            key={open ? "close" : "help"}
-            initial={{ rotate: open ? -90 : 90, scale: 0.6, opacity: 0 }}
-            animate={{ rotate: 0, scale: 1, opacity: 1 }}
-            exit={{ rotate: open ? 90 : -90, scale: 0.6, opacity: 0 }}
-            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-            className="grid place-items-center"
-          >
-            {open ? (
-              <X className="h-5 w-5" aria-hidden />
-            ) : (
-              <MessageCircleQuestion className="h-[1.35rem] w-[1.35rem] transition-transform duration-300 group-hover:-rotate-12" aria-hidden />
-            )}
-          </motion.span>
-        </AnimatePresence>
-        {unseen > 0 && !open && (
-          <span className="tabular absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-danger px-1 text-[0.62rem] font-bold leading-none text-ink ring-2 ring-[rgb(var(--card))]">
-            {unseen > 9 ? "9+" : unseen}
-          </span>
-        )}
-        {!open && (
-          <span
-            aria-hidden
-            className="pointer-events-none absolute right-full top-1/2 mr-3 hidden -translate-y-1/2 translate-x-1 whitespace-nowrap rounded-full border border-line bg-card px-3 py-1.5 text-xs font-semibold text-paper opacity-0 shadow-soft transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100 sm:block"
-          >
-            Help &amp; feedback
-          </span>
-        )}
-      </motion.button>
-    </motion.div>,
-    document.body,
-  );
+export function helpButtonLabel(unseen: number) {
+  if (!unseen) return "Help & feedback";
+  return `Help & feedback: the team answered ${unseen === 1 ? "a message" : `${unseen} messages`}`;
 }
