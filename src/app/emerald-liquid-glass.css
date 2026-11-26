@@ -1,0 +1,267 @@
+/* The white canvas stays matte and reserves optical glass for controls. */
+[data-surface="emerald-liquid-glass"] {
+  color-scheme: light;
+  --ink: 255 255 255;
+  --card: 255 255 255;
+  --card-2: 247 247 247;
+  --paper: 0 0 0;
+  --line: 96 96 96;
+  --shadow: 0 0 0;
+  --scrim: 0 0 0;
+  --wash: 0.65;
+  --aura-1: 220 220 220;
+  --aura-2: 240 240 240;
+  --accent: 20 116 58;
+  --accent-2: 21 107 55;
+  --accent-ink: 17 92 48;
+  --accent-fg: 255 255 255;
+  --accent-glow: 0.12;
+  --selection: 72 148 95;
+  --positive: 21 107 55;
+  --warning: 126 75 13;
+  --danger: 158 28 46;
+  --info: 30 81 55;
+  --vivid-up: 72 148 95;
+  --vivid-down: 167 44 59;
+  --bloom-1: 21 107 55;
+  --bloom-2: 100 151 114;
+  --bloom-3: 59 120 76;
+  --bloom-4: 85 130 66;
+  --bloom-5: 61 127 109;
+  --bloom-6: 58 91 72;
+  --quiet: 0.81;
+  --quiet-canvas: 0.86;
+  --gridline: 0.1;
+  --backdrop: none;
+
+  --shell-bg: rgb(255 255 255 / 0.52);
+  --shell-border: rgb(38 38 38 / 0.22);
+  --shell-shadow: 0 8px 24px -18px rgb(var(--shadow) / 0.55);
+  --shell-filter: none;
+  --stage-bg: rgb(255 255 255 / 0.44);
+  --stage-border: rgb(38 38 38 / 0.19);
+  --stage-shadow: none;
+  --stage-image: none;
+  --drawer-bg: rgb(255 255 255 / 0.98);
+  --drawer-border: var(--shell-border);
+  --nav-hover: rgb(0 0 0 / 0.05);
+  --nav-active: rgb(0 0 0 / 0.08);
+  --nav-active-fg: rgb(var(--paper));
+  --nav-active-ring: rgb(24 24 24 / 0.44);
+  --glass-tint: var(--card);
+  --glass-inner-tint: var(--card-2);
+  --glass-edge: 38 38 38;
+  --glass-panel-a: 0.25;
+  --glass-inner-a: 0.18;
+  --glass-chrome-a: 0.48;
+  --glass-overlay-a: 0.95;
+  --glass-field: 255 255 255;
+  --glass-field-a: 0.06;
+  --glass-field-focus-a: 0.12;
+  --glass-field-border: 50 50 50;
+  --glass-field-border-a: 0.45;
+  --glass-edge-a: 0.2;
+  --glass-rim-a: 0.11;
+  --glass-outline: 38 38 38;
+  --glass-outline-a: 0.06;
+  --glass-glint: none;
+  --glass-sheen: none;
+  --glass-gloss: none;
+  --glass-inner-image: none;
+  --glass-drop: 0 5px 16px -12px rgb(var(--shadow) / 0.52);
+  --glass-drop-lift: 0 12px 26px -16px rgb(var(--shadow) / 0.56);
+  --glass-chrome-filter: none;
+  --glass-overlay-filter: blur(12px);
+
+  --emerald-duration: 300ms;
+  --emerald-curve: cubic-bezier(0.22, 1, 0.36, 1);
+  --emerald-focus: #111;
+  --emerald-glass-sheen:
+    radial-gradient(100% 85% at 2% 0%, rgb(255 255 255 / 0.18), transparent 58%),
+    linear-gradient(155deg, rgb(255 255 255 / 0.12), transparent 32% 68%, rgb(0 0 0 / 0.055));
+  --emerald-glass-shade:
+    inset 1px 1px 0 rgb(255 255 255 / 0.24),
+    inset -1px -1px 0 rgb(0 0 0 / 0.12),
+    inset 0 -8px 11px -11px rgb(255 255 255 / 0.54),
+    0 5px 12px -8px rgb(var(--shadow) / 0.68);
+  --select-sheen: var(--emerald-glass-sheen);
+  --lg-fill: rgb(255 255 255 / 0.065);
+  --lg-fill-hover: rgb(0 0 0 / 0.055);
+  --lg-border: rgb(48 48 48 / 0.3);
+  --lg-sheen: var(--emerald-glass-sheen);
+  --lg-shadow: var(--emerald-glass-shade);
+  --lg-tint-sheen: var(--emerald-glass-sheen);
+  --lg-tint-rims: var(--emerald-glass-shade);
+  --lg-track: rgb(24 24 24 / 0.35);
+  --lg-track-shadow: inset 0 1px 3px rgb(var(--shadow) / 0.4);
+  --lg-blur: blur(6px) saturate(1.08);
+}
+
+/* The backdrop on the root also covers pages outside the app shell. */
+html[data-surface="emerald-liquid-glass"] {
+  background-color: rgb(var(--ink));
+  background-image: var(--backdrop);
+  background-attachment: fixed;
+}
+
+html[data-surface="emerald-liquid-glass"] body { background-color: transparent; }
+
+/* Contrast support is tonal and flat. Scroll keeps the atmosphere stationary. */
+html[data-surface="emerald-liquid-glass"] :is(.app-stage, .site-root main) {
+  background-color: var(--stage-bg);
+}
+
+html[data-surface="emerald-liquid-glass"] :is(
+  .text-paper\/60, .text-paper\/65, .text-paper\/70, .text-paper\/75
+) {
+  color: rgb(var(--paper) / var(--quiet));
+}
+
+html[data-surface="emerald-liquid-glass"] .flap {
+  color: rgb(var(--paper));
+  --flap-from: 255 255 255;
+  --flap-to: 225 225 225;
+  --flap-glow: 190 190 190;
+  --flap-rim: 0 0 0 1px rgb(38 38 38 / 0.2);
+}
+
+html[data-surface="emerald-liquid-glass"] .tour-root {
+  --tour-glow-1: 220 220 220;
+  --tour-glow-2: 240 240 240;
+  --tour-glow-3: 210 210 210;
+  --tour-glow-a: 0.09;
+  --tour-glare: 0.14;
+  --tour-shine-a: 0.17;
+  background-image: var(--backdrop);
+}
+
+/* Keep blur on the dock and overlays. Scrolling lists reuse the same optics
+   without a separate compositing layer for each button. */
+html[data-surface="emerald-liquid-glass"] :where(.app-stage, .site-root main) { --lg-blur: none; }
+
+html[data-surface="emerald-liquid-glass"] :is(
+  button:not(.field),
+  summary,
+  a:is(.lg-clear, .glass-ghost, .bg-accent, .bg-paper, .rounded-full, [aria-current="page"])
+):not(:disabled, [aria-disabled="true"], [data-quick-actions] *) {
+  background-color: var(--lg-fill);
+  background-image: var(--lg-sheen);
+  border-color: var(--lg-border);
+  box-shadow: var(--lg-shadow);
+  -webkit-backdrop-filter: var(--lg-blur);
+  backdrop-filter: var(--lg-blur);
+  transition: background-color var(--emerald-duration) var(--emerald-curve),
+    border-color var(--emerald-duration) var(--emerald-curve),
+    box-shadow var(--emerald-duration) var(--emerald-curve),
+    scale var(--emerald-duration) var(--emerald-curve);
+}
+
+html[data-surface="emerald-liquid-glass"] :is(button, a):is(.bg-accent, .bg-paper, [role="switch"]) {
+  color: rgb(var(--paper));
+}
+
+html[data-surface="emerald-liquid-glass"] :is(button, a):is(.bg-accent, .bg-paper, .lg-on):not(:disabled),
+html[data-surface="emerald-liquid-glass"] :is(button, a)[aria-pressed="true"],
+html[data-surface="emerald-liquid-glass"] :is(button, a)[aria-selected="true"],
+html[data-surface="emerald-liquid-glass"] :is(button, a)[aria-current="page"]:not([data-quick-actions] *),
+html[data-surface="emerald-liquid-glass"] button[aria-checked="true"] {
+  border-color: rgb(32 32 32 / 0.52);
+  background-color: rgb(0 0 0 / 0.045);
+}
+
+html[data-surface="emerald-liquid-glass"] button[role="switch"] > span {
+  background-color: rgb(115 115 115 / 0.68);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.8), 0 1px 3px rgb(var(--shadow) / 0.44);
+}
+html[data-surface="emerald-liquid-glass"] button[role="switch"][aria-checked="true"] > span {
+  background-color: rgb(25 25 25);
+}
+
+html[data-surface="emerald-liquid-glass"] :is(
+  .field, textarea, select, input:not([type="hidden"], [type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"])
+) {
+  border-color: rgb(var(--glass-field-border) / var(--glass-field-border-a));
+  background-color: rgb(var(--glass-field) / var(--glass-field-a));
+  background-image: var(--emerald-glass-sheen);
+  box-shadow: var(--emerald-glass-shade);
+  color: rgb(var(--paper));
+  transition: background-color var(--emerald-duration) var(--emerald-curve),
+    border-color var(--emerald-duration) var(--emerald-curve);
+}
+
+html[data-surface="emerald-liquid-glass"] :is(
+  .field, textarea, select, input:not([type="hidden"], [type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"])
+):focus {
+  background-color: rgb(var(--glass-field) / var(--glass-field-focus-a));
+}
+
+html[data-surface="emerald-liquid-glass"] option {
+  color: rgb(var(--paper));
+  background-color: rgb(var(--card));
+}
+
+html[data-surface="emerald-liquid-glass"] :is(.lg-track, .lg-lens) {
+  border-color: var(--lg-border);
+  background-color: rgb(255 255 255 / 0.085);
+  box-shadow: var(--lg-shadow);
+}
+
+html[data-surface="emerald-liquid-glass"] :is(button, a[href], summary, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--emerald-focus);
+  outline-offset: 3px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html[data-surface="emerald-liquid-glass"] :is(
+    button, summary, a:is(.lg-clear, .glass-ghost, .bg-accent, .bg-paper, .rounded-full)
+  ):hover:not(:disabled, [aria-disabled="true"], [data-quick-actions] *) {
+    background-color: var(--lg-fill-hover);
+    border-color: rgb(32 32 32 / 0.58);
+    box-shadow: var(--emerald-glass-shade), inset 0 1px 0 rgb(255 255 255 / 0.43);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html[data-surface="emerald-liquid-glass"] :is(
+    button, summary, a:is(.lg-clear, .glass-ghost, .bg-accent, .bg-paper, .rounded-full)
+  ):active:not(:disabled, [aria-disabled="true"], [data-quick-actions] *) {
+    scale: 0.985;
+  }
+}
+
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  [data-surface="emerald-liquid-glass"] {
+    --lg-fill: rgb(245 245 245 / 0.96);
+    --lg-fill-hover: rgb(232 232 232 / 0.98);
+  }
+}
+
+[data-surface="emerald-liquid-glass"][data-transparency="reduced"] {
+  --shell-bg: rgb(255 255 255);
+  --stage-bg: rgb(255 255 255);
+  --drawer-bg: rgb(255 255 255);
+  --glass-overlay-a: 1;
+  --glass-field: 245 245 245;
+  --glass-field-a: 1;
+  --glass-field-focus-a: 1;
+  --lg-fill: rgb(245 245 245);
+  --lg-fill-hover: rgb(232 232 232);
+  --lg-blur: none;
+  --glass-overlay-filter: none;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  [data-surface="emerald-liquid-glass"] {
+    --shell-bg: rgb(255 255 255);
+    --stage-bg: rgb(255 255 255);
+    --drawer-bg: rgb(255 255 255);
+    --glass-overlay-a: 1;
+    --glass-field: 245 245 245;
+    --glass-field-a: 1;
+    --glass-field-focus-a: 1;
+    --lg-fill: rgb(245 245 245);
+    --lg-fill-hover: rgb(232 232 232);
+    --lg-blur: none;
+    --glass-overlay-filter: none;
+  }
+}

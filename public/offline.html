@@ -62,6 +62,63 @@
           linear-gradient(180deg, rgb(252 251 255) 0%, rgb(247 246 252) 60%, rgb(243 241 250) 100%);
         color-scheme: light;
       }
+      [data-surface="aurora-jade"] {
+        --ink: 232 241 234;
+        --paper: 38 76 61;
+        --accent: 61 170 150;
+        --accent-fg: 16 46 38;
+        --shadow: 63 119 95;
+        --pane: rgb(248 252 249 / 0.92);
+        --pane-edge: rgb(187 220 199);
+        --quiet: 0.8;
+        --backdrop: radial-gradient(58% 57% at 17% -9%, rgb(248 252 249 / 0.94), transparent 72%),
+          radial-gradient(54% 64% at -9% 66%, rgb(187 220 199 / 0.82), transparent 76%),
+          radial-gradient(55% 62% at 103% 4%, rgb(100 154 128 / 0.68), transparent 76%),
+          linear-gradient(145deg, #E8F1EA 10%, #F8FCF9 49%, #C2E0CF 100%);
+        color-scheme: light;
+      }
+      [data-surface="royal-porcelain"] {
+        --ink: 250 234 208;
+        --paper: 56 37 27;
+        --accent: 208 128 39;
+        --accent-fg: 40 22 7;
+        --shadow: 147 100 56;
+        --pane: rgb(251 244 228 / 0.92);
+        --pane-edge: rgb(232 213 181);
+        --quiet: 0.8;
+        --backdrop: radial-gradient(58% 57% at 17% -9%, rgb(251 244 228 / 0.94), transparent 72%),
+          radial-gradient(54% 64% at -9% 66%, rgb(233 174 134 / 0.82), transparent 76%),
+          radial-gradient(55% 62% at 103% 4%, rgb(244 213 159 / 0.68), transparent 76%),
+          linear-gradient(145deg, #FAEAD0 10%, #FBF4E4 49%, #E8D5B5 100%);
+        color-scheme: light;
+      }
+      [data-surface="dreamscape"] {
+        --ink: 247 201 250;
+        --paper: 48 34 64;
+        --accent: 149 92 249;
+        --accent-fg: 23 10 45;
+        --shadow: 140 87 189;
+        --pane: rgb(252 237 253 / 0.92);
+        --pane-edge: rgb(232 196 240);
+        --quiet: 0.8;
+        --backdrop: radial-gradient(58% 57% at 17% -9%, rgb(247 213 250 / 0.94), transparent 72%),
+          radial-gradient(54% 64% at -9% 66%, rgb(226 141 235 / 0.82), transparent 76%),
+          radial-gradient(55% 62% at 103% 4%, rgb(200 139 255 / 0.68), transparent 76%),
+          linear-gradient(145deg, #F7C9FA 10%, #F7D5FA 49%, #D2CDF5 100%);
+        color-scheme: light;
+      }
+      [data-surface="emerald-liquid-glass"] {
+        --ink: 255 255 255;
+        --paper: 0 0 0;
+        --accent: 20 116 58;
+        --accent-fg: 255 255 255;
+        --shadow: 0 0 0;
+        --pane: rgb(255 255 255 / 0.92);
+        --pane-edge: rgb(0 0 0 / 0.22);
+        --quiet: 0.86;
+        --backdrop: none;
+        color-scheme: light;
+      }
       * {
         box-sizing: border-box;
       }
@@ -247,6 +304,12 @@
         } else if (mode === "light") {
           document.documentElement.setAttribute("data-surface", "white");
           meta.setAttribute("content", "#d6eefb");
+        } else {
+          var extra = {"aurora-jade":"#e8f1ea","royal-porcelain":"#faead0","dreamscape":"#f7c9fa","emerald-liquid-glass":"#ffffff"};
+          if (Object.prototype.hasOwnProperty.call(extra, mode)) {
+            document.documentElement.setAttribute("data-surface", mode);
+            meta.setAttribute("content", extra[mode]);
+          }
         }
       } catch (e) {}
       window.addEventListener("online", function () {

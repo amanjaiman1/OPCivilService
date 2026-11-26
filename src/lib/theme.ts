@@ -1,7 +1,7 @@
 import type { ThemeMode } from "./types";
 
 /* ════════════════════════════════════════════════════════════════
-   Appearance — three themes.
+   Appearance themes.
 
      • Lavender (the default): crisp white panels on a near-white
        backdrop with pastel glows, and one violet.
@@ -11,7 +11,7 @@ import type { ThemeMode } from "./types";
        white for what's interactive.
 
    The mode is what's saved and synced; the screen shows its surface, the
-   `data-surface` attribute on <html> ("white", "black" or "lavender").
+   `data-surface` attribute on <html>.
    Reduce transparency (`data-transparency="reduced"`) makes any theme
    nearly solid, for anyone who finds see-through panels hard to read.
 
@@ -29,7 +29,17 @@ import type { ThemeMode } from "./types";
 export type { ThemeMode } from "./types";
 
 /** The surfaces the CSS knows. */
-export type Surface = "white" | "black" | "lavender";
+export const THEME_SURFACES = {
+  light: "white",
+  dark: "black",
+  lavender: "lavender",
+  "aurora-jade": "aurora-jade",
+  "royal-porcelain": "royal-porcelain",
+  dreamscape: "dreamscape",
+  "emerald-liquid-glass": "emerald-liquid-glass",
+} as const satisfies Record<ThemeMode, string>;
+
+export type Surface = (typeof THEME_SURFACES)[ThemeMode];
 
 /**
  * What a new account, a signed-out screen and the public site wear. An
@@ -48,10 +58,14 @@ export const THEME_MODES: ThemeModeMeta[] = [
   { id: "light", label: "Light", hint: "Frosted glass on a soft sky blue" },
   { id: "dark", label: "Dark", hint: "Pure black, for the night" },
   { id: "lavender", label: "Lavender", hint: "Crisp white on a soft pastel glow" },
+  { id: "aurora-jade", label: "Aurora Jade", hint: "Mint glass and a fresh jade accent" },
+  { id: "royal-porcelain", label: "Royal Porcelain", hint: "Pearl white glass over warm champagne" },
+  { id: "dreamscape", label: "Dreamscape", hint: "Pink, orchid and periwinkle glass" },
+  { id: "emerald-liquid-glass", label: "Emerald Liquid Glass", hint: "Clear glass controls on pure white with emerald accents" },
 ];
 
 export function isThemeMode(v: unknown): v is ThemeMode {
-  return v === "light" || v === "dark" || v === "lavender";
+  return typeof v === "string" && Object.prototype.hasOwnProperty.call(THEME_SURFACES, v);
 }
 
 export const DARK_QUERY = "(prefers-color-scheme: dark)";
@@ -71,8 +85,8 @@ export function systemPrefersDark(): boolean {
  * something unrecognisable, is the default.
  */
 export function legacyThemeMode(saved: unknown, prefersDark = systemPrefersDark()): ThemeMode {
-  if (saved === "dark" || saved === "lavender") return saved;
-  if (saved === "light" || saved === "blue") return "light";
+  if (isThemeMode(saved)) return saved;
+  if (saved === "blue") return "light";
   if (saved === "system") return prefersDark ? "dark" : "light";
   return DEFAULT_THEME_MODE;
 }
@@ -85,9 +99,7 @@ export function themeModeFromSurface(surface: unknown): ThemeMode {
 }
 
 export function surfaceFor(mode: ThemeMode): Surface {
-  if (mode === "dark") return "black";
-  if (mode === "lavender") return "lavender";
-  return "white";
+  return THEME_SURFACES[mode];
 }
 
 let easeTimer = 0;

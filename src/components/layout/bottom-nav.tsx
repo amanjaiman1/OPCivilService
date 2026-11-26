@@ -14,7 +14,7 @@ import { AppLink } from "./app-link";
 import styles from "./bottom-nav.module.css";
 
 type LensSide = "home" | "help";
-const TAP_PREVIEW_MS = 220;
+const TAP_PREVIEW_MS = 260;
 
 export function QuickActionsDock() {
   const [hoveredSide, setHoveredSide] = useState<LensSide | null>(null);
@@ -70,7 +70,7 @@ export function QuickActionsDock() {
   if (!visible) return null;
 
   return (
-    <nav aria-label="Quick actions" className={`${styles.wrap} pointer-events-none fixed inset-x-0 z-30 flex items-center justify-center`}>
+    <nav data-quick-actions aria-label="Quick actions" className={`${styles.wrap} pointer-events-none fixed inset-x-0 z-30 flex items-center justify-center`}>
       <div
         className={`${styles.dock} ${available ? "" : styles.compact}`}
         data-lens-side={(desktop ? hoveredSide : tappedSide) ?? "center"}
@@ -78,7 +78,11 @@ export function QuickActionsDock() {
         onPointerCancel={resetLens}
         onClickCapture={resetForClick}
       >
-        {available && <span className={styles.lens} data-dock-lens aria-hidden="true" />}
+        {available && (
+          <span className={styles.lensTrack} aria-hidden="true">
+            <span className={styles.lens} data-dock-lens />
+          </span>
+        )}
         {home && (
           <AppLink
             href="/dashboard"
