@@ -107,6 +107,22 @@
           linear-gradient(145deg, #F7C9FA 10%, #F7D5FA 49%, #D2CDF5 100%);
         color-scheme: light;
       }
+      [data-surface="emerald-liquid-glass"] {
+        --ink: 3 34 17;
+        --paper: 240 248 241;
+        --accent: 139 218 157;
+        --accent-fg: 3 34 17;
+        --shadow: 2 25 13;
+        --pane: rgb(3 34 17 / 0.68);
+        --pane-edge: rgb(235 255 237 / 0.24);
+        --quiet: 0.86;
+        --backdrop:
+          radial-gradient(80% 105% at 12% 5%, rgb(99 179 107 / 0.8), transparent 71%),
+          radial-gradient(62% 79% at 20% 41%, rgb(130 167 124 / 0.68), transparent 72%),
+          radial-gradient(66% 82% at 100% 104%, rgb(3 34 17), transparent 89%),
+          linear-gradient(154deg, #449252 0%, #155e2b 45%, #08441f 73%, #032211 100%);
+        color-scheme: dark;
+      }
       * {
         box-sizing: border-box;
       }
@@ -293,7 +309,7 @@
           document.documentElement.setAttribute("data-surface", "white");
           meta.setAttribute("content", "#d6eefb");
         } else {
-          var extra = {"aurora-jade":"#e8f1ea","royal-porcelain":"#faead0","dreamscape":"#f7c9fa"};
+          var extra = {"aurora-jade":"#e8f1ea","royal-porcelain":"#faead0","dreamscape":"#f7c9fa","emerald-liquid-glass":"#032211"};
           if (Object.prototype.hasOwnProperty.call(extra, mode)) {
             document.documentElement.setAttribute("data-surface", mode);
             meta.setAttribute("content", extra[mode]);

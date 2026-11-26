@@ -36,6 +36,7 @@ export const THEME_SURFACES = {
   "aurora-jade": "aurora-jade",
   "royal-porcelain": "royal-porcelain",
   dreamscape: "dreamscape",
+  "emerald-liquid-glass": "emerald-liquid-glass",
 } as const satisfies Record<ThemeMode, string>;
 
 export type Surface = (typeof THEME_SURFACES)[ThemeMode];
@@ -60,6 +61,7 @@ export const THEME_MODES: ThemeModeMeta[] = [
   { id: "aurora-jade", label: "Aurora Jade", hint: "Mint glass and a fresh jade accent" },
   { id: "royal-porcelain", label: "Royal Porcelain", hint: "Pearl white glass over warm champagne" },
   { id: "dreamscape", label: "Dreamscape", hint: "Pink, orchid and periwinkle glass" },
+  { id: "emerald-liquid-glass", label: "Emerald Liquid Glass", hint: "Clear glass controls over a deep green atmosphere" },
 ];
 
 export function isThemeMode(v: unknown): v is ThemeMode {

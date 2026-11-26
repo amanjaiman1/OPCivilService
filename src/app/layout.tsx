@@ -2,6 +2,7 @@ import { THEME_SURFACES } from "@/lib/theme";
 import type { Metadata, Viewport } from "next";
 import { Comfortaa, Poppins } from "next/font/google";
 import "./globals.css";
+import "./emerald-liquid-glass.css";
 import { INDEXABLE, SITE, SITE_URL } from "@/lib/seo/config";
 import { PAGES } from "@/lib/seo/pages";
 

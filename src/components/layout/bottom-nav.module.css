@@ -36,6 +36,57 @@
   --dock-lens-text: var(--dock-active);
 }
 
+:global(html[data-surface="emerald-liquid-glass"]) .wrap {
+  --dock-bg:
+    radial-gradient(90% 125% at 0% 0%, rgb(255 255 255 / 0.2), transparent 66%),
+    linear-gradient(152deg, rgb(255 255 255 / 0.11), rgb(255 255 255 / 0.035) 66%),
+    rgb(4 32 17 / 0.7);
+  --dock-edge: rgb(235 255 238 / 0.54);
+  --dock-shadow: rgb(2 25 13 / 0.38);
+  --dock-icon: rgb(231 246 232);
+  --dock-active: rgb(250 255 251);
+  --dock-badge-bg: rgb(228 251 232);
+  --dock-badge-text: rgb(var(--ink));
+  --dock-outline-track: rgb(241 255 242 / 0.11);
+  --dock-outline-glow: rgb(241 255 242 / 0.28);
+  --dock-outline-peak: rgb(235 255 239 / 0.56);
+  --dock-lens-rim: rgb(239 255 241 / 0.56);
+  --dock-lens-base: rgb(255 255 255 / 0.08);
+  --dock-lens-solid: #235a37;
+  --dock-lens-core: rgb(3 34 17 / 0.09);
+  --dock-lens-glint: rgb(241 255 243 / 0.44);
+  --dock-lens-tint: rgb(252 255 253 / 0.12);
+  --dock-lens-text: rgb(250 255 251);
+}
+
+:global(html[data-surface="emerald-liquid-glass"]) .dock {
+  -webkit-backdrop-filter: blur(12px) saturate(1.08);
+  backdrop-filter: blur(12px) saturate(1.08);
+}
+
+:global(html[data-surface="emerald-liquid-glass"]) .dock::after {
+  /* The fixed rim stays lit. The lens supplies the motion. */
+  animation: none;
+}
+
+:global(html[data-surface="emerald-liquid-glass"]) .house path:first-child {
+  stroke: #164227;
+}
+
+:global(html[data-surface="emerald-liquid-glass"][data-transparency="reduced"]) .dock {
+  --dock-bg: #153e26;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :global(html[data-surface="emerald-liquid-glass"]) .dock {
+    --dock-bg: #153e26;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
 .dock {
   position: relative;
   display: grid;

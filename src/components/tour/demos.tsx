@@ -1174,6 +1174,7 @@ const MODE_ICON: Record<ThemeMode, typeof Sun> = {
   "aurora-jade": Leaf,
   "royal-porcelain": Gem,
   dreamscape: Sparkles,
+  "emerald-liquid-glass": Gem,
 };
 
 /** A theme in its own colours: the backdrop, a sidebar, a page and the accent. */
@@ -1221,7 +1222,7 @@ function ThemesDemo({ t0 }: DemoProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col justify-center gap-2">
-      <div role="radiogroup" aria-label="Theme" className="grid min-h-0 grid-cols-3 gap-1.5 overflow-y-auto p-1">
+      <div role="radiogroup" aria-label="Theme" className="grid min-h-0 grid-cols-3 gap-1.5 overflow-y-auto p-1 sm:grid-cols-4">
         {THEME_MODES.map((m, i) => {
           const on = mode === m.id;
           const Icon = MODE_ICON[m.id];

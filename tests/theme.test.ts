@@ -14,10 +14,10 @@ beforeEach(() => {
   useChronicle.setState(blankChronicleState());
 });
 
-test("there are six themes and Lavender is the default", () => {
+test("there are seven themes and Lavender is the default", () => {
   assert.deepEqual(
     THEME_MODES.map((m) => m.label),
-    ["Light", "Dark", "Lavender", "Aurora Jade", "Royal Porcelain", "Dreamscape"],
+    ["Light", "Dark", "Lavender", "Aurora Jade", "Royal Porcelain", "Dreamscape", "Emerald Liquid Glass"],
   );
   assert.equal(DEFAULT_THEME_MODE, "lavender");
   assert.equal(store().themeMode, "lavender");
@@ -48,7 +48,7 @@ test("Lavender is kept as it is: chosen, synced, painted before load, and read b
 
 test("new palette modes persist and round-trip through the account snapshot", () => {
   setActiveAccount("account-a");
-  for (const mode of ["aurora-jade", "royal-porcelain", "dreamscape"] as const) {
+  for (const mode of ["aurora-jade", "royal-porcelain", "dreamscape", "emerald-liquid-glass"] as const) {
     store().setThemeMode(mode);
     assert.equal(surfaceFor(mode), mode);
     assert.equal(legacyThemeMode(mode), mode);

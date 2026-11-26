@@ -18,6 +18,7 @@ const MODE_ICON: Record<ThemeMode, typeof Sun> = {
   "aurora-jade": Leaf,
   "royal-porcelain": Gem,
   dreamscape: Sparkles,
+  "emerald-liquid-glass": Gem,
 };
 
 /**

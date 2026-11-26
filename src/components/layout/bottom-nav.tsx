@@ -70,7 +70,7 @@ export function QuickActionsDock() {
   if (!visible) return null;
 
   return (
-    <nav aria-label="Quick actions" className={`${styles.wrap} pointer-events-none fixed inset-x-0 z-30 flex items-center justify-center`}>
+    <nav data-quick-actions aria-label="Quick actions" className={`${styles.wrap} pointer-events-none fixed inset-x-0 z-30 flex items-center justify-center`}>
       <div
         className={`${styles.dock} ${available ? "" : styles.compact}`}
         data-lens-side={(desktop ? hoveredSide : tappedSide) ?? "center"}
