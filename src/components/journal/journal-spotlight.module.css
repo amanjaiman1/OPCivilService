@@ -1,0 +1,92 @@
+@media (min-width: 1024px) and (any-hover: hover) and (any-pointer: fine) {
+  .form {
+    --spotlight-glow: 0.31;
+    --spotlight-wash: 0.1;
+    --spotlight-edge: 0.92;
+  }
+
+  :global(html[data-surface="black"]) .form {
+    --spotlight-glow: 0.24;
+    --spotlight-wash: 0.075;
+    --spotlight-edge: 0.84;
+  }
+
+  .section {
+    --spotlight-inset: 2px;
+    position: relative;
+  }
+
+  .dialog .section { --spotlight-inset: -7px -9px; }
+  .dialog .contained { --spotlight-inset: 2px; }
+
+  .section[data-spotlight-active] {
+    isolation: isolate;
+  }
+
+  .section[data-spotlight-active]::before,
+  .section[data-spotlight-active]::after {
+    position: absolute;
+    inset: var(--spotlight-inset);
+    border-radius: 0.875rem;
+    content: "";
+    pointer-events: none;
+  }
+
+  .section[data-spotlight-active]::before {
+    z-index: -1;
+    background:
+      radial-gradient(ellipse 15rem 12rem at var(--spotlight-x, 50%) var(--spotlight-y, 50%),
+        rgb(var(--accent) / var(--spotlight-glow)), transparent 77%),
+      radial-gradient(ellipse 31rem 19rem at var(--spotlight-x, 50%) var(--spotlight-y, 50%),
+        rgb(var(--accent) / var(--spotlight-wash)), transparent 78%),
+      linear-gradient(145deg, rgb(var(--accent) / 0.08), transparent 57%);
+    box-shadow: inset 0 0 0 1px rgb(var(--accent) / 0.26), inset 0 1px 14px rgb(var(--accent) / 0.06);
+  }
+
+  .section[data-spotlight-active]::after {
+    z-index: 1;
+    border: 1px solid rgb(var(--accent) / 0.46);
+  }
+
+  @supports (mask-composite: exclude) {
+    .section[data-spotlight-active]::after {
+      inset: var(--spotlight-inset);
+      border: 0;
+      padding: 4px;
+      background:
+        radial-gradient(ellipse 10rem 7rem at var(--spotlight-x, 50%) var(--spotlight-y, 50%),
+          rgb(var(--accent) / var(--spotlight-edge)), transparent 66%),
+        radial-gradient(circle, rgb(var(--accent) / 0.42) 0.65px, transparent 1px) 0 0 / 4px 4px;
+      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      mask-composite: exclude;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .section[data-spotlight-active]::before,
+    .section[data-spotlight-active]::after {
+      animation: journal-spotlight-in 160ms ease-out both;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .section[data-spotlight-active]::before,
+    .section[data-spotlight-active]::after {
+      --spotlight-x: 50%;
+      --spotlight-y: 50%;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .section[data-spotlight-active]::after {
+      border: 1px solid Highlight;
+      background: none;
+      mask: none;
+    }
+  }
+}
+
+@keyframes journal-spotlight-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
