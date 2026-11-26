@@ -1,7 +1,5 @@
 "use client";
 
-import spotlight from "@/components/journal/journal-spotlight.module.css";
-
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, Moon, Activity, Droplets, BrainCircuit, SlidersHorizontal, X } from "lucide-react";
 import type { ISODate, LifeEntry, LifeField } from "@/lib/types";
@@ -243,7 +241,7 @@ export function LifeFields({
     );
 
   const tracking = (
-    <div className={cn("flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line px-3.5 py-2.5", page && spotlight.section, page ? "bg-paper/[0.03]" : "bg-paper/[0.02]")}>
+    <div className={cn("flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line px-3.5 py-2.5", page ? "bg-paper/[0.03]" : "bg-paper/[0.02]")}>
       <p className="min-w-0 flex-1 text-[0.75rem] text-paper/65">{page ? "Tracked fields" : `You track ${trackedNames.length ? trackedNames.join(", ") : "nothing yet"}.`}</p>
       <button type="button" onClick={onChooseFields} className="inline-flex items-center gap-1.5 text-[0.75rem] font-semibold text-accent hover:underline">
         <SlidersHorizontal className="h-3.5 w-3.5" /> Choose fields
@@ -278,7 +276,7 @@ export function LifeFields({
         {tracking}
         <div className="grid items-start gap-3 lg:grid-cols-2">
           {[...groups.filter((g) => g.title !== "Sleep"), ...groups.filter((g) => g.title === "Sleep")].map((g) => (
-            <div key={g.title} className={cn("min-w-0 rounded-2xl border border-line bg-paper/[0.02] p-4", spotlight.section)}>
+            <div key={g.title} className="min-w-0 rounded-2xl border border-line bg-paper/[0.02] p-4">
               <Group icon={g.icon} title={g.title}>
                 {groupBody(g)}
               </Group>
@@ -286,11 +284,8 @@ export function LifeFields({
           ))}
         </div>
         <details className="rounded-xl border border-line px-4 py-3">
-          <summary className={cn("cursor-pointer text-sm font-semibold text-paper", spotlight.section)}>Notes and files</summary>
-          <div className="mt-4 space-y-4">
-            <div className={spotlight.section}>{note}</div>
-            <div className={spotlight.section}>{files}</div>
-          </div>
+          <summary className="cursor-pointer text-sm font-semibold text-paper">Notes and files</summary>
+          <div className="mt-4 space-y-4">{note}{files}</div>
         </details>
       </div>
     );

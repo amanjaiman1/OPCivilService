@@ -1,7 +1,5 @@
 "use client";
 
-import spotlight from "@/components/journal/journal-spotlight.module.css";
-
 import { memo, useMemo, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
@@ -107,7 +105,7 @@ export function GoalsTab({
 
   return (
     <div className="space-y-5">
-      <div className={cn("flex flex-wrap items-end justify-between gap-3", spotlight.section)}>
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-[1.02rem] font-semibold tracking-snugg text-paper">Goals you&rsquo;re working on</h2>
           <p className="mt-0.5 text-[0.8rem] text-paper/60">
@@ -127,22 +125,20 @@ export function GoalsTab({
       </div>
 
       {shown.length === 0 ? (
-        <div className={spotlight.section}>
-          <EmptyState
-            icon={<Target className="h-5 w-5" />}
-            title={goals.length ? "No active goals" : "No goals yet"}
-            description={
-              goals.length
-                ? "Your goals are paused or finished. Start a new one, or reopen one on the Goals page."
-                : "Set a goal for study hours, topics, mocks or anything you track by hand, then record progress here each day."
-            }
-            action={
-              <Button size="sm" onClick={() => setCreating(emptyGoal())}>
-                <Plus className="h-3.5 w-3.5" /> Create a goal
-              </Button>
-            }
-          />
-        </div>
+        <EmptyState
+          icon={<Target className="h-5 w-5" />}
+          title={goals.length ? "No active goals" : "No goals yet"}
+          description={
+            goals.length
+              ? "Your goals are paused or finished. Start a new one, or reopen one on the Goals page."
+              : "Set a goal for study hours, topics, mocks or anything you track by hand, then record progress here each day."
+          }
+          action={
+            <Button size="sm" onClick={() => setCreating(emptyGoal())}>
+              <Plus className="h-3.5 w-3.5" /> Create a goal
+            </Button>
+          }
+        />
       ) : (
         <ul className="divide-y divide-line overflow-hidden rounded-3xl border border-line bg-paper/[0.015] shadow-soft" aria-label="Goals">
           {shown.map((p) => (
@@ -213,7 +209,7 @@ const GoalCaptureCard = memo(function GoalCaptureCard({
       : "Not measured yet";
 
   return (
-    <li className={cn("min-w-0", spotlight.section)}>
+    <li className="min-w-0">
       <div className={cn("px-4 py-4 transition-colors sm:px-6 sm:py-5", pending && "bg-accent/[0.05]", error && "bg-danger/[0.06]")}>
         <div className="flex items-start gap-3">
           <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-xl", PILL[tone])} aria-hidden>

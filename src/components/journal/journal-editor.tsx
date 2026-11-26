@@ -14,8 +14,6 @@ import { AttachmentTray, type SessionFile } from "@/components/attachments/attac
 import { removeStoredPaths } from "@/lib/file-storage";
 import { toDraft, mergeByKey } from "./constants";
 import { FeelingSliders } from "./feeling-sliders";
-import { JournalSpotlight } from "./journal-spotlight";
-import spotlight from "./journal-spotlight.module.css";
 import { round, formatHours, cn, toISODate, formatDate } from "@/lib/utils";
 import { accomplishedStreak } from "@/lib/selectors";
 import { formatClock, timeFormatOf } from "@/lib/sleep";
@@ -40,7 +38,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className={cn("space-y-2.5", spotlight.section)}>
+    <section className="space-y-2.5">
       <div className="flex items-baseline justify-between gap-3">
         <h3 className="text-[0.78rem] font-semibold tracking-snugg text-paper/80">{title}</h3>
         {aside && <span className="text-xs text-paper/55">{aside}</span>}
@@ -70,7 +68,7 @@ function HeroCard({
   className?: string;
 }) {
   return (
-    <section className={cn("min-w-0", spotlight.section, className)}>
+    <section className={cn("min-w-0", className)}>
       <header className="mb-5 flex items-start justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
           <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-accent/15 text-accent ring-1 ring-accent/20" aria-hidden>
@@ -103,7 +101,7 @@ function PlainCard({
   className?: string;
 }) {
   return (
-    <section className={cn("min-w-0", spotlight.section, className)}>
+    <section className={cn("min-w-0", className)}>
       <header className="mb-3.5 flex items-center justify-between gap-3">
         <h3 className="flex items-center gap-2 text-[0.88rem] font-semibold tracking-snugg text-paper">
           <Icon className="h-4 w-4 text-accent" aria-hidden /> {title}
@@ -702,7 +700,7 @@ export function JournalFields({
         type="button"
         onClick={() => setMore((m) => !m)}
         aria-expanded={more}
-        className={cn("flex w-full items-center justify-between gap-3 text-left", spotlight.section, spotlight.contained, page ? "px-4 py-4 transition-colors hover:bg-paper/[0.03] sm:px-6" : "px-4 py-3")}
+        className={cn("flex w-full items-center justify-between gap-3 text-left", page ? "px-4 py-4 transition-colors hover:bg-paper/[0.03] sm:px-6" : "px-4 py-3")}
       >
         <span>
           <span className="block text-[0.78rem] font-semibold text-paper/80">More details</span>
@@ -755,12 +753,12 @@ export function JournalFields({
     </section>
   );
 
-  const planning = <WeeklyTargets className={cn(spotlight.section, page && "border-t border-line p-4 sm:p-6")} entry={draft} changes={editor.weeklyTargets} onChange={editor.setWeeklyTargets} />;
+  const planning = <WeeklyTargets className={page ? "border-t border-line p-4 sm:p-6" : undefined} entry={draft} changes={editor.weeklyTargets} onChange={editor.setWeeklyTargets} />;
   if (page) {
     const topicCount = draft.completedTopics?.length ?? 0;
     const pad = "p-4 sm:p-6";
     return (
-      <JournalSpotlight className="overflow-hidden rounded-2xl border border-line bg-card">
+      <div className="overflow-hidden rounded-2xl border border-line bg-card">
         {/* What the day was mostly about, first and largest. */}
         <div className="grid divide-y divide-line xl:grid-cols-[minmax(0,1.08fr)_minmax(0,1fr)] xl:divide-x xl:divide-y-0">
           <StudyCard className={pad} draft={draft} patch={patch} subjects={subjects} target={profile.dailyHourTarget} />
@@ -851,14 +849,14 @@ export function JournalFields({
         </div>
 
         <div className="border-t border-line">{moreDetails}</div>
-      </JournalSpotlight>
+      </div>
     );
   }
 
   return (
-    <JournalSpotlight className="space-y-7" dialog>
+    <div className="space-y-7">
       {/* The day */}
-      <div className={cn("flex flex-wrap items-end gap-x-4 gap-y-2", spotlight.section)}>
+      <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
         <Field label="Date" className="w-44">
           <Input
             type="date"
@@ -888,6 +886,6 @@ export function JournalFields({
       {files}
       {goalLinks}
       {moreDetails}
-    </JournalSpotlight>
+    </div>
   );
 }
