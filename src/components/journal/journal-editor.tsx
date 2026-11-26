@@ -12,7 +12,8 @@ import { WeeklyTargets } from "./weekly-targets";
 import { TopicPicker } from "./topic-picker";
 import { AttachmentTray, type SessionFile } from "@/components/attachments/attachment-tray";
 import { removeStoredPaths } from "@/lib/file-storage";
-import { toDraft, mergeByKey, MOOD_LABELS, ENERGY_LABELS, MOTIVATION_LABELS, FOCUS_LABELS } from "./constants";
+import { toDraft, mergeByKey } from "./constants";
+import { FeelingSliders } from "./feeling-sliders";
 import { round, formatHours, cn, toISODate, formatDate } from "@/lib/utils";
 import { accomplishedStreak } from "@/lib/selectors";
 import { formatClock, timeFormatOf } from "@/lib/sleep";
@@ -45,49 +46,6 @@ function Section({
       {hint && <p className="-mt-1.5 text-[0.7rem] text-paper/45">{hint}</p>}
       {children}
     </section>
-  );
-}
-
-/** One 1–5 rating, compact enough that four fit in two rows. */
-function RatingRow({
-  label,
-  value,
-  onChange,
-  labels,
-}: {
-  label: string;
-  value: number;
-  onChange: (v: number) => void;
-  labels: string[];
-}) {
-  return (
-    <div>
-      <div className="mb-1.5 flex items-baseline justify-between">
-        <span className="text-xs font-medium text-paper/70">{label}</span>
-        <span className="text-[0.68rem] text-paper/50">{labels[value]}</span>
-      </div>
-      <div className="flex gap-1" role="radiogroup" aria-label={label}>
-        {[1, 2, 3, 4, 5].map((v) => (
-          <button
-            key={v}
-            type="button"
-            role="radio"
-            aria-checked={value === v}
-            aria-label={`${label}: ${labels[v]}`}
-            title={labels[v]}
-            onClick={() => onChange(v)}
-            className={cn(
-              "h-8 flex-1 rounded-lg border text-[0.7rem] font-semibold transition-colors",
-              v <= value
-                ? "border-accent bg-accent text-accent-fg"
-                : "border-line bg-paper/[0.03] text-paper/45 hover:border-paper/25 hover:text-paper",
-            )}
-          >
-            {v}
-          </button>
-        ))}
-      </div>
-    </div>
   );
 }
 
@@ -672,12 +630,7 @@ export function JournalFields({
 
   const feel = (
     <Section title="How the day felt">
-      <div className={cn("grid grid-cols-1 gap-x-5 gap-y-3", !page && "sm:grid-cols-2")}>
-        <RatingRow label="Mood" value={draft.mood} onChange={(v) => patch({ mood: v })} labels={MOOD_LABELS} />
-        <RatingRow label="Energy" value={draft.energy} onChange={(v) => patch({ energy: v })} labels={ENERGY_LABELS} />
-        <RatingRow label="Motivation" value={draft.motivation} onChange={(v) => patch({ motivation: v })} labels={MOTIVATION_LABELS} />
-        <RatingRow label="Focus" value={draft.focus} onChange={(v) => patch({ focus: v })} labels={FOCUS_LABELS} />
-      </div>
+      <FeelingSliders values={draft} onChange={patch} />
     </Section>
   );
 
@@ -852,12 +805,7 @@ export function JournalFields({
             <RevisionPicker date={draft.date} sessions={draft.revisionSessions ?? []} onChange={(revisionSessions) => patch({ revisionSessions })} />
           </PlainCard>
           <PlainCard className={pad} icon={Smile} title="How the day felt">
-            <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2">
-              <RatingRow label="Mood" value={draft.mood} onChange={(v) => patch({ mood: v })} labels={MOOD_LABELS} />
-              <RatingRow label="Energy" value={draft.energy} onChange={(v) => patch({ energy: v })} labels={ENERGY_LABELS} />
-              <RatingRow label="Motivation" value={draft.motivation} onChange={(v) => patch({ motivation: v })} labels={MOTIVATION_LABELS} />
-              <RatingRow label="Focus" value={draft.focus} onChange={(v) => patch({ focus: v })} labels={FOCUS_LABELS} />
-            </div>
+            <FeelingSliders values={draft} onChange={patch} />
           </PlainCard>
         </div>
 

@@ -21,8 +21,8 @@ import { daysBetween, toISODate } from "@/lib/utils";
  * The floating bar above the page. On a desktop it is mostly search: a wide
  * field that opens the command palette (⌘K / Ctrl+K), then the exam countdown
  * and the one loud action, logging today. The account and notifications live
- * on the rail there. On a phone the bar carries the menu, the brand, and
- * those two as well. The feature tour's button is here on every page: a
+ * on the rail there. On a phone the bar carries the menu, account and
+ * notifications. The feature tour's button is here on every page: a
  * labelled pill on a desktop, a compass on a phone.
  */
 export function Topbar({
@@ -37,7 +37,7 @@ export function Topbar({
 }) {
   const guide = entryGuideForPath(usePathname());
   const profile = useChronicle((s) => s.profile);
-  const { mode } = useAccount();
+  const { mode, user } = useAccount();
   const mounted = useMounted();
   const daysLeft = mounted ? daysBetween(toISODate(new Date()), profile.examDate) : null;
 
@@ -49,10 +49,12 @@ export function Topbar({
             <IconButton label="Open menu" onClick={onOpenDrawer}>
               <Menu className="h-5 w-5" />
             </IconButton>
-            <Link href="/dashboard" aria-label="DoOrDie — Home" className="flex items-center gap-2 px-1">
-              <Logo className="h-6 w-6" />
-              <span className="hidden font-brand text-[0.95rem] font-bold tracking-[-0.03em] text-paper min-[400px]:inline">DoOrDie</span>
-            </Link>
+            {!user && (
+              <Link href="/dashboard" aria-label="DoOrDie — Home" className="flex items-center gap-2 px-1">
+                <Logo className="h-6 w-6" />
+                <span className="hidden font-brand text-[0.95rem] font-bold tracking-[-0.03em] text-paper min-[400px]:inline">DoOrDie</span>
+              </Link>
+            )}
           </>
         )}
 
