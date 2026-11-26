@@ -1625,11 +1625,14 @@ async function refreshScenarios(browser, people) {
       b.click();
     });
     check(await header.getByRole("button", { name: "Refreshing admin data" }).isVisible(), "the button didn't say it was refreshing");
+    const loader = page.getByRole("status").filter({ hasText: "Refreshing admin data…" });
+    await loader.waitFor();
     for (let i = 0; i < 2; i++) {
       await page.waitForTimeout(150);
       await button.click({ force: true, noWaitAfter: true });
     }
     await waitFor("the refresh to finish", async () => Number(await header.getAttribute("data-refresh-run")) > runBefore);
+    await loader.waitFor({ state: "hidden" });
     await page.unroute(slowList);
     await page.waitForTimeout(500);
     check(Number(await header.getAttribute("data-refresh-run")) === runBefore + 1, "five presses made more than one refresh");

@@ -22,6 +22,7 @@ export function TopicPicker({
   subjects,
   journal,
   prefer,
+  defaultSubjectId,
 }: {
   value: TopicCompletion[];
   onChange: (next: TopicCompletion[]) => void;
@@ -29,6 +30,7 @@ export function TopicPicker({
   journal: JournalEntry[];
   /** Subjects studied in this entry, whose topics are suggested first. */
   prefer?: string[];
+  defaultSubjectId?: string;
 }) {
   const [query, setQuery] = useState("");
   const [selection, setSelection] = useState<string | null>(null);
@@ -41,7 +43,7 @@ export function TopicPicker({
   const subjectName = useMemo(() => new Map(subjects.map((s) => [s.id, s.name])), [subjects]);
   const chosen = useMemo(() => new Set(value.map(completionKey)), [value]);
   const preferSet = useMemo(() => new Set((prefer ?? []).filter((id) => subjectName.has(id))), [prefer, subjectName]);
-  const suggested = preferSet.size === 1 ? [...preferSet][0] : "";
+  const suggested = defaultSubjectId && subjectName.has(defaultSubjectId) ? defaultSubjectId : "";
   const subjectId = selection !== null && subjectName.has(selection) ? selection : selection === "" ? "" : suggested;
 
   const options = useMemo(

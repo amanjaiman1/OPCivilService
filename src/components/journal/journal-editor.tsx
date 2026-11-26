@@ -14,6 +14,7 @@ import { AttachmentTray, type SessionFile } from "@/components/attachments/attac
 import { removeStoredPaths } from "@/lib/file-storage";
 import { toDraft, mergeByKey } from "./constants";
 import { FeelingSliders } from "./feeling-sliders";
+import { useEntryEditOutline } from "@/components/ui/entry-edit-outline";
 import { round, formatHours, cn, toISODate, formatDate } from "@/lib/utils";
 import { accomplishedStreak } from "@/lib/selectors";
 import { formatClock, timeFormatOf } from "@/lib/sleep";
@@ -27,18 +28,20 @@ import { formatClock, timeFormatOf } from "@/lib/sleep";
 
 /** A titled block of the form. Light on chrome: a label, and the controls. */
 function Section({
+  className,
   title,
   aside,
   hint,
   children,
 }: {
+  className?: string;
   title: string;
   aside?: React.ReactNode;
   hint?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className="space-y-2.5">
+    <section className={cn("space-y-2.5", className)}>
       <div className="flex items-baseline justify-between gap-3">
         <h3 className="text-[0.78rem] font-semibold tracking-snugg text-paper/80">{title}</h3>
         {aside && <span className="text-xs text-paper/55">{aside}</span>}
@@ -127,12 +130,14 @@ function StudyCard({
   subjects,
   target,
   className,
+  onStudySubject,
 }: {
   draft: JournalEntry;
   patch: (p: Partial<JournalEntry>) => void;
   subjects: Subject[];
   target: number;
   className?: string;
+  onStudySubject: (id: string) => void;
 }) {
   const blocks = draft.blocks;
   const total = round(blocks.reduce((a, b) => a + (Number(b.hours) || 0), 0), 2);
@@ -196,7 +201,11 @@ function StudyCard({
             <Select
               value={b.subjectId}
               aria-label={`Subject ${i + 1}`}
-              onChange={(e) => setBlock(i, { subjectId: e.target.value })}
+              onChange={(event) => {
+                const subjectId = event.target.value;
+                setBlock(i, { subjectId });
+                onStudySubject(subjectId);
+              }}
               className="min-w-0 flex-1 font-medium"
             >
               <option value="">Choose a subject…</option>
@@ -489,10 +498,12 @@ export function JournalFields({
   editor,
   isEdit,
   variant = "dialog",
+  outlineEnabled = true,
 }: {
   editor: JournalEditor;
   isEdit: boolean;
   variant?: "dialog" | "page";
+  outlineEnabled?: boolean;
 }) {
   const subjects = useChronicle((s) => s.subjects);
   const journal = useChronicle((s) => s.journal);
@@ -502,13 +513,41 @@ export function JournalFields({
   const clock = timeFormatOf(profile);
   const { draft, patch, base, goalIds, setGoalIds, more, setMore } = editor;
   const page = variant === "page";
+  const outline = useEntryEditOutline({
+    date: [draft.date],
+    study: [draft.blocks],
+    topics: [draft.completedTopics, editor.scheduleRevision],
+    revision: [draft.revisionSessions],
+    feelings: [draft.mood, draft.energy, draft.motivation, draft.focus],
+    notes: [draft.highlights, draft.reflection],
+    files: draft.fileIds ?? [],
+    goals: goalIds,
+    weekly: [editor.weeklyTargets],
+    wins: [draft.wins],
+    setbacks: [draft.failures],
+    lessons: [draft.lessons],
+    books: [draft.booksStudied],
+    affairs: [draft.currentAffairs],
+    mocks: [draft.mocksAttempted],
+    tags: [draft.tags],
+  }, base, outlineEnabled);
 
   const existingDates = useMemo(() => new Set(journal.map((j) => j.date)), [journal]);
   const todayISO = toISODate(new Date());
   const wouldReplaceAnotherDay = draft.date !== base.date && existingDates.has(draft.date);
   const totalDraftHours = round(draft.blocks.reduce((a, b) => a + (Number(b.hours) || 0), 0), 1);
   const recordedSleep = useMemo(() => recordedSleepFor(draft.date, journal, lifeLog), [journal, lifeLog, draft.date]);
-  const studiedSubjects = useMemo(() => [...new Set(draft.blocks.map((b) => b.subjectId).filter(Boolean))], [draft.blocks]);
+  const [lastSelection, setLastSelection] = useState<{ base: JournalEntry; id: string; revision: number } | null>(null);
+  const studiedSubjects = useMemo(() => draft.blocks.map((block) => block.subjectId).filter(Boolean), [draft.blocks]);
+  const lastStudySubject = lastSelection?.base === base && studiedSubjects.includes(lastSelection.id)
+    ? lastSelection.id
+    : studiedSubjects.at(-1) ?? "";
+
+  const topicPickerKey = `${base.date}:${lastStudySubject}:${lastSelection?.base === base ? lastSelection.revision : 0}`;
+
+  function selectStudySubject(id: string) {
+    if (id) setLastSelection((previous) => ({ base, id, revision: (previous?.revision ?? 0) + 1 }));
+  }
   const activeGoals = useMemo(
     () => goals.filter((g) => g.status === "Active" || goalIds.includes(g.id)).sort((a, b) => a.title.localeCompare(b.title)),
     [goals, goalIds],
@@ -537,7 +576,7 @@ export function JournalFields({
   );
 
   const study = (
-    <Section title="Study" aside={`${formatHours(totalDraftHours)} total`} hint={page ? "Hours by subject. Empty rows are left out." : undefined}>
+    <Section className={outline("study", true)} title="Study" aside={`${formatHours(totalDraftHours)} total`} hint={page ? "Hours by subject. Empty rows are left out." : undefined}>
       <div className="space-y-2">
         {draft.blocks.map((b, i) => (
           <div key={i} className="flex items-center gap-2">
@@ -548,6 +587,7 @@ export function JournalFields({
                 const blocks = [...draft.blocks];
                 blocks[i] = { ...blocks[i], subjectId: e.target.value };
                 patch({ blocks });
+                selectStudySubject(e.target.value);
               }}
               className="min-w-0 flex-1"
             >
@@ -598,13 +638,15 @@ export function JournalFields({
   );
 
   const topics = (
-    <Section title="Topics completed" aside={draft.completedTopics?.length ? `${draft.completedTopics.length}` : undefined}>
+    <Section className={outline("topics", true)} title="Topics completed" aside={draft.completedTopics?.length ? `${draft.completedTopics.length}` : undefined}>
       <TopicPicker
         value={draft.completedTopics ?? []}
         onChange={(completedTopics) => patch({ completedTopics })}
         subjects={subjects}
         journal={journal}
         prefer={studiedSubjects}
+        defaultSubjectId={lastStudySubject}
+        key={topicPickerKey}
       />
       {newSyllabusTopics > 0 && (
         <label className="flex cursor-pointer items-start gap-2.5 text-xs text-paper/70">
@@ -623,19 +665,19 @@ export function JournalFields({
   );
 
   const revision = (
-    <Section title="Revision">
+    <Section className={outline("revision", true)} title="Revision">
       <RevisionPicker date={draft.date} sessions={draft.revisionSessions ?? []} onChange={(revisionSessions) => patch({ revisionSessions })} />
     </Section>
   );
 
   const feel = (
-    <Section title="How the day felt">
+    <Section className={outline("feelings", true)} title="How the day felt">
       <FeelingSliders values={draft} onChange={patch} />
     </Section>
   );
 
   const notes = (
-    <Section title={page ? "Write about your day" : "Notes"} hint={page ? "One line that sums it up, then as much as you like." : undefined}>
+    <Section className={outline("notes", true)} title={page ? "Write about your day" : "Notes"} hint={page ? "One line that sums it up, then as much as you like." : undefined}>
       <Input
         value={draft.highlights ?? ""}
         onChange={(e) => patch({ highlights: e.target.value })}
@@ -655,7 +697,7 @@ export function JournalFields({
   );
 
   const files = (
-    <Section title="Files" aside={draft.fileIds?.length ? `${draft.fileIds.length}` : undefined}>
+    <Section className={outline("files", true)} title="Files" aside={draft.fileIds?.length ? `${draft.fileIds.length}` : undefined}>
       <AttachmentTray
         entryDate={draft.date}
         otherDates={isEdit && draft.date !== base.date ? [base.date] : undefined}
@@ -670,7 +712,7 @@ export function JournalFields({
   );
 
   const goalLinks = activeGoals.length > 0 && (
-    <Section title="Goals this day served" hint="Linked days show up on the goal, with their files.">
+    <Section className={outline("goals", true)} title="Goals this day served" hint="Linked days show up on the goal, with their files.">
       <div className="flex flex-wrap gap-1.5">
         {activeGoals.map((g) => {
           const on = goalIds.includes(g.id);
@@ -710,17 +752,17 @@ export function JournalFields({
       </button>
       {more && (
         <div className={cn("space-y-6 border-t border-line pb-4 pt-4", page ? "px-4 pb-6 pt-5 sm:px-6" : "px-4")}>
-          <Section title="Wins">
+          <Section className={outline("wins", true)} title="Wins">
             <ListEditor items={draft.wins ?? []} onChange={(wins) => patch({ wins })} placeholder="What went well?" />
           </Section>
-          <Section title="Setbacks">
+          <Section className={outline("setbacks", true)} title="Setbacks">
             <ListEditor items={draft.failures ?? []} onChange={(failures) => patch({ failures })} placeholder="What slipped?" />
           </Section>
-          <Section title="Lessons">
+          <Section className={outline("lessons", true)} title="Lessons">
             <ListEditor items={draft.lessons ?? []} onChange={(lessons) => patch({ lessons })} placeholder="What will you carry into tomorrow?" />
           </Section>
           <div className="grid gap-6 sm:grid-cols-2">
-            <Section title="Books">
+            <Section className={outline("books", true)} title="Books">
               <ListEditor
                 variant="chips"
                 items={(draft.booksStudied ?? []).map((b) => b.title)}
@@ -728,7 +770,7 @@ export function JournalFields({
                 placeholder="Book title"
               />
             </Section>
-            <Section title="Current affairs">
+            <Section className={outline("affairs", true)} title="Current affairs">
               <ListEditor
                 variant="chips"
                 items={(draft.currentAffairs ?? []).map((c) => c.title)}
@@ -736,7 +778,7 @@ export function JournalFields({
                 placeholder="Headline or topic"
               />
             </Section>
-            <Section title="Mocks attempted">
+            <Section className={outline("mocks", true)} title="Mocks attempted">
               <ListEditor
                 variant="chips"
                 items={(draft.mocksAttempted ?? []).map((m) => m.name)}
@@ -744,7 +786,7 @@ export function JournalFields({
                 placeholder="Mock name"
               />
             </Section>
-            <Section title="Tags">
+            <Section className={outline("tags", true)} title="Tags">
               <ListEditor variant="chips" items={draft.tags ?? []} onChange={(tags) => patch({ tags })} placeholder="deep-work, revision…" />
             </Section>
           </div>
@@ -753,7 +795,7 @@ export function JournalFields({
     </section>
   );
 
-  const planning = <WeeklyTargets className={page ? "border-t border-line p-4 sm:p-6" : undefined} entry={draft} changes={editor.weeklyTargets} onChange={editor.setWeeklyTargets} />;
+  const planning = <WeeklyTargets className={cn(page && "border-t border-line p-4 sm:p-6", outline("weekly", !page))} entry={draft} changes={editor.weeklyTargets} onChange={editor.setWeeklyTargets} />;
   if (page) {
     const topicCount = draft.completedTopics?.length ?? 0;
     const pad = "p-4 sm:p-6";
@@ -761,9 +803,9 @@ export function JournalFields({
       <div className="overflow-hidden rounded-2xl border border-line bg-card">
         {/* What the day was mostly about, first and largest. */}
         <div className="grid divide-y divide-line xl:grid-cols-[minmax(0,1.08fr)_minmax(0,1fr)] xl:divide-x xl:divide-y-0">
-          <StudyCard className={pad} draft={draft} patch={patch} subjects={subjects} target={profile.dailyHourTarget} />
+          <StudyCard className={cn(pad, outline("study"))} draft={draft} patch={patch} subjects={subjects} target={profile.dailyHourTarget} onStudySubject={selectStudySubject} />
           <HeroCard
-            className={pad}
+            className={cn(pad, outline("topics"))}
             icon={BookOpenCheck}
             title="Topics completed"
             hint="Choose a subject, then find or add a topic."
@@ -780,6 +822,8 @@ export function JournalFields({
               subjects={subjects}
               journal={journal}
               prefer={studiedSubjects}
+              defaultSubjectId={lastStudySubject}
+              key={topicPickerKey}
             />
             {newSyllabusTopics > 0 && (
               <label className="flex cursor-pointer items-start gap-2.5 rounded-xl bg-accent/[0.07] px-3.5 py-3 text-xs text-paper/75">
@@ -801,15 +845,15 @@ export function JournalFields({
 
         {/* Then the rest of the day, each in its own bay of the same sheet. */}
         <div className="grid divide-y divide-line border-t border-line lg:grid-cols-2 lg:divide-x lg:divide-y-0">
-          <PlainCard className={pad} icon={RotateCcw} title="Revision" aside={draft.revisionSessions?.length ? `${draft.revisionSessions.length} done` : undefined}>
+          <PlainCard className={cn(pad, outline("revision"))} icon={RotateCcw} title="Revision" aside={draft.revisionSessions?.length ? `${draft.revisionSessions.length} done` : undefined}>
             <RevisionPicker date={draft.date} sessions={draft.revisionSessions ?? []} onChange={(revisionSessions) => patch({ revisionSessions })} />
           </PlainCard>
-          <PlainCard className={pad} icon={Smile} title="How the day felt">
+          <PlainCard className={cn(pad, outline("feelings"))} icon={Smile} title="How the day felt">
             <FeelingSliders values={draft} onChange={patch} />
           </PlainCard>
         </div>
 
-        <PlainCard className={cn(pad, "border-t border-line")} icon={PenLine} title="Reflection">
+        <PlainCard className={cn(pad, "border-t border-line", outline("notes"))} icon={PenLine} title="Reflection">
           <div className="space-y-2.5">
             <Input
               value={draft.highlights ?? ""}
@@ -830,7 +874,7 @@ export function JournalFields({
         </PlainCard>
 
         <div className="grid divide-y divide-line border-t border-line lg:grid-cols-[minmax(0,1fr)_minmax(0,19rem)] lg:divide-x lg:divide-y-0">
-          <PlainCard className={pad} icon={Paperclip} title="Files" aside={draft.fileIds?.length ? `${draft.fileIds.length}` : undefined}>
+          <PlainCard className={cn(pad, outline("files"))} icon={Paperclip} title="Files" aside={draft.fileIds?.length ? `${draft.fileIds.length}` : undefined}>
             <AttachmentTray
               entryDate={draft.date}
               otherDates={isEdit && draft.date !== base.date ? [base.date] : undefined}
@@ -856,7 +900,7 @@ export function JournalFields({
   return (
     <div className="space-y-7">
       {/* The day */}
-      <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
+      <div className={cn("flex flex-wrap items-end gap-x-4 gap-y-2", outline("date", true))}>
         <Field label="Date" className="w-44">
           <Input
             type="date"

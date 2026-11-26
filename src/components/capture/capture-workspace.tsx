@@ -578,13 +578,14 @@ export function CaptureWorkspace({
   const failures = outcome ? (Object.entries(outcome.results) as [CaptureSection, SectionResult][]).filter(([, r]) => !r.ok) : [];
 
   const panel = (id: CaptureSection) => {
+    const outlineEnabled = section === id && !saving;
     switch (id) {
       case "day":
         return (
           <div className="space-y-4">
             {journalEd.error && <Notice tone="danger">{journalEd.error}</Notice>}
             {journalEd.uploading && <Notice>Waiting for files to finish uploading…</Notice>}
-            <JournalFields editor={journalEd} isEdit={Boolean(savedEntry)} variant="page" />
+            <JournalFields editor={journalEd} isEdit={Boolean(savedEntry)} variant="page" outlineEnabled={outlineEnabled} />
           </div>
         );
       case "life":
@@ -599,7 +600,7 @@ export function CaptureWorkspace({
             {outcome?.results.life && !outcome.results.life.ok && dirty.life && lifeEd.valid && (
               <Notice tone="danger">{outcome.results.life.message}</Notice>
             )}
-            <LifeFields editor={lifeEd} onChooseFields={() => setFieldsOpen(true)} variant="page" />
+            <LifeFields editor={lifeEd} onChooseFields={() => setFieldsOpen(true)} variant="page" outlineEnabled={outlineEnabled} />
           </div>
         );
       case "goals":
@@ -612,6 +613,7 @@ export function CaptureWorkspace({
             onLinks={setGoalIds}
             canLink={Boolean(savedEntry) || journalEd.entryDirty}
             errors={outcome?.goalErrors ?? {}}
+            outlineEnabled={outlineEnabled}
           />
         );
       case "habit":
@@ -625,6 +627,7 @@ export function CaptureWorkspace({
             onToggle={onHabitToggle}
             hasHabits={habits.some((h) => !h.archived)}
             previewing={journalEd.dirty || lifeEd.dirty}
+            outlineEnabled={outlineEnabled}
           />
         );
     }

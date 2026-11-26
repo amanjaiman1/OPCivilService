@@ -1,5 +1,7 @@
 "use client";
 
+import { useEntryEditOutline } from "@/components/ui/entry-edit-outline";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, Moon, Activity, Droplets, BrainCircuit, SlidersHorizontal, X } from "lucide-react";
 import type { ISODate, LifeEntry, LifeField } from "@/lib/types";
@@ -37,9 +39,14 @@ function FieldError({ children }: { children?: string }) {
   );
 }
 
-function Group({ icon: Icon, title, children }: { icon: typeof Moon; title: string; children: React.ReactNode }) {
+function Group({ icon: Icon, title, children, className }: {
+  icon: typeof Moon;
+  title: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
-    <fieldset className="space-y-3">
+    <fieldset className={cn("space-y-3", className)}>
       <legend className="mb-1 flex items-center gap-2 text-[0.78rem] font-semibold tracking-snugg text-paper/80">
         <Icon className="h-4 w-4 text-accent" /> {title}
       </legend>
@@ -107,10 +114,12 @@ export function LifeFields({
   editor,
   onChooseFields,
   variant = "dialog",
+  outlineEnabled = true,
 }: {
   editor: LifeEditor;
   onChooseFields: () => void;
   variant?: "dialog" | "page";
+  outlineEnabled?: boolean;
 }) {
   const lifeLog = useChronicle((s) => s.lifeLog);
   const profile = useChronicle((s) => s.profile);
@@ -155,6 +164,17 @@ export function LifeFields({
 
   const trackedNames = LIFE_FIELDS.filter((f) => fields.has(f.id)).map((f) => f.label.toLowerCase());
   const groups = GROUPS.filter((g) => g.fields.some((f) => fields.has(f)));
+  const groupValues = Object.fromEntries(groups.map((group) => [
+    group.title,
+    LIFE_INPUTS.filter((input) => group.fields.includes(input.field)).map((input) => draft.numbers[input.key]),
+  ]));
+  const outline = useEntryEditOutline({
+    ...groupValues,
+    Sleep: [draft.bedtime, draft.wakeTime, draft.sleepQuality, draft.numbers.sleepHours],
+    Movement: [...(groupValues.Movement ?? []), draft.exerciseType],
+    note: [draft.note],
+    files: saved?.fileIds ?? [],
+  }, base, outlineEnabled);
 
   const groupBody = (g: (typeof GROUPS)[number]) =>
     g.title === "Sleep" ? (
@@ -250,18 +270,20 @@ export function LifeFields({
   );
 
   const note = (
-    <Field label="A line about the day" hint="Optional. Up to 280 characters.">
-      <Input
-        value={draft.note}
-        onChange={(e) => setDraft((d) => ({ ...d, note: e.target.value }))}
-        maxLength={280}
-        placeholder="e.g. Slept badly, short walk after lunch"
-      />
-    </Field>
+    <div className={outline("note", true)}>
+      <Field label="A line about the day" hint="Optional. Up to 280 characters.">
+        <Input
+          value={draft.note}
+          onChange={(e) => setDraft((d) => ({ ...d, note: e.target.value }))}
+          maxLength={280}
+          placeholder="e.g. Slept badly, short walk after lunch"
+        />
+      </Field>
+    </div>
   );
 
   const files = (
-    <div className="space-y-2">
+    <div className={cn("space-y-2", outline("files", true))}>
       <p className="text-[0.78rem] font-semibold tracking-snugg text-paper/60">Files from your journal</p>
       <p className="text-[0.7rem] text-paper/50">
         Links are saved straight away and never copy the file. Files from this day&rsquo;s journal entry are listed first.
@@ -276,7 +298,7 @@ export function LifeFields({
         {tracking}
         <div className="grid items-start gap-3 lg:grid-cols-2">
           {[...groups.filter((g) => g.title !== "Sleep"), ...groups.filter((g) => g.title === "Sleep")].map((g) => (
-            <div key={g.title} className="min-w-0 rounded-2xl border border-line bg-paper/[0.02] p-4">
+            <div key={g.title} className={cn("min-w-0 rounded-2xl border border-line bg-paper/[0.02] p-4", outline(g.title))}>
               <Group icon={g.icon} title={g.title}>
                 {groupBody(g)}
               </Group>
@@ -295,7 +317,7 @@ export function LifeFields({
     <div className="space-y-7" data-testid="life-form">
       {tracking}
       {groups.map((g) => (
-        <Group key={g.title} icon={g.icon} title={g.title}>
+        <Group key={g.title} icon={g.icon} title={g.title} className={outline(g.title, true)}>
           {groupBody(g)}
         </Group>
       ))}
