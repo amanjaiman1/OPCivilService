@@ -3,18 +3,12 @@ import { Menu } from "lucide-react";
 import { Logo } from "@/components/layout/logo";
 import { PAGES } from "@/lib/seo/pages";
 import { AccountLinks } from "./account-links";
-import { OpenSourceLink } from "./open-source-link";
 import { InstallAppButton } from "./install-app";
 import { Container } from "./ui";
 
 const NAV = [PAGES.features, PAGES.resources, PAGES.blog, PAGES.about];
 
-/**
- * The public site's header. Plain links (crawlable, no JavaScript needed); the
- * mobile menu is a native <details> disclosure. "Open source" links to the
- * public repository; "Install app" appears beside them when this browser can
- * install the app.
- */
+/** Public site navigation with crawlable links and a native mobile menu. */
 export function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-ink/85 backdrop-blur-xl print:hidden">
@@ -40,9 +34,6 @@ export function SiteHeader() {
         </nav>
 
         <div className="ml-auto flex items-center gap-2">
-          <div className="hidden lg:block">
-            <OpenSourceLink />
-          </div>
           <InstallAppButton />
           <div className="hidden md:block">
             <AccountLinks />
@@ -73,9 +64,6 @@ export function SiteHeader() {
             </nav>
             <div className="mt-3 border-t border-line pt-3">
               <AccountLinks compact />
-            </div>
-            <div className="mt-2 border-t border-line pt-2">
-              <OpenSourceLink variant="menu" />
             </div>
           </div>
         </details>
