@@ -8,7 +8,7 @@ import { NavRail } from "./nav-rail";
 import { RouteTransition } from "./route-transition";
 import { PageTransition } from "./page-transition";
 import { Topbar } from "./topbar";
-import { CaptureButton } from "./bottom-nav";
+import { MobileDock } from "./bottom-nav";
 import { CaptureProvider } from "@/components/capture/capture-provider";
 import { hasOpenOverlay } from "@/components/ui/modal";
 import { FileJanitor } from "@/components/attachments/file-janitor";
@@ -49,8 +49,8 @@ const EASE = [0.22, 1, 0.36, 1] as const;
  *            navigation never crowd a smaller screen
  *   page     a floating search bar above the stage the page sits in
  *
- * On a phone: a top bar, the page edge to edge, a floating dock for the four
- * everyday sections, and the sidebar as a drawer behind "More" or the menu.
+ * On a phone: a top bar, an edge-to-edge page, a floating dock for quick
+ * actions, and the full sidebar behind the menu.
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const desktop = useMatchMedia("(min-width: 1024px)");
@@ -167,7 +167,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     // account may open (lib/features.ts) and what the team has sent it.
     <FeatureAccessScope accountId={accountId}>
     <PlatformInbox userId={mode === "cloud" ? (user?.id ?? null) : null}>
-    <HelpFeedback enabled={help}>
+    <HelpFeedback enabled={help} desktop={desktop}>
     <DemoChrome>
     <NotificationsProvider>
       <MotionConfig reducedMotion="user">
@@ -291,12 +291,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   </PageTransition>
                   {demo && <DemoGuideSpace />}
                   {/* Room at the end of the page, so the Help & feedback button never covers the last line. */}
-                  {help && <div aria-hidden className="h-12 shrink-0 lg:h-8" />}
+                  {help && <div aria-hidden className="hidden h-8 shrink-0 lg:block" />}
                 </div>
               </main>
             </div>
 
-            <CaptureButton />
+            <MobileDock />
             {mode === "cloud" && user && <ReviewInvitation key={user.id} userId={user.id}
               blocked={drawerOpen || paletteOpen || appearanceOpen || flyoutOpen} />}
             {demo ? <DemoGuide /> : <FileJanitor />}

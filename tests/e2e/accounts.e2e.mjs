@@ -379,11 +379,12 @@ async function phaseTwo(page, student) {
   await page.setViewportSize({ width: 1440, height: 960 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   const home = page.url();
-  const round = await trigger.evaluate((element) => {
+  const round = await trigger.locator("svg").evaluate((glyph) => {
+    const element = glyph.parentElement;
     const { width, height } = element.getBoundingClientRect();
     return width === height && parseFloat(getComputedStyle(element).borderTopLeftRadius) >= width / 2;
   });
-  check(round, "the desktop Capture button is not circular");
+  check(round, "the desktop Capture disc is not circular");
   await trigger.click();
   await workspace.waitFor();
   check(page.url() === home, "opening from Home changed the address");

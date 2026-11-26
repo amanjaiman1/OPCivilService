@@ -2,9 +2,8 @@
 
 /* ════════════════════════════════════════════════════════════════
    HELP & FEEDBACK
-   A small round button at the bottom right of every page of the app, for
-   signed-in accounts only: never on the public site, the sign-in screens,
-   the Admin Center, the demo, or a build without accounts. It opens a
+   Available from the mobile dock or a desktop corner button for signed-in
+   accounts. It opens a
    panel to send the team a bug report, an idea or a question (with a
    screenshot if it helps), to read their answers, and to switch automatic
    crash reports on or off.
@@ -39,6 +38,8 @@ export type HelpView = "send" | "messages";
 interface HelpValue {
   /** Opens the panel, on "Your messages" when the team has answered something unread, else on a new message. */
   open: (view?: HelpView) => void;
+  isOpen: boolean;
+  unseen: number;
 }
 
 const HelpContext = createContext<HelpValue | null>(null);
@@ -55,12 +56,12 @@ type Sent = MyFeedback & { screenshot: "stored" | "failed" | null };
  * Wraps the app's shell. With `enabled` off it adds nothing at all: no
  * button, no panel, no requests.
  */
-export function HelpFeedback({ enabled, children }: { enabled: boolean; children: React.ReactNode }) {
+export function HelpFeedback({ enabled, desktop, children }: { enabled: boolean; desktop: boolean; children: React.ReactNode }) {
   if (!enabled) return <>{children}</>;
-  return <HelpFeedbackOn>{children}</HelpFeedbackOn>;
+  return <HelpFeedbackOn desktop={desktop}>{children}</HelpFeedbackOn>;
 }
 
-function HelpFeedbackOn({ children }: { children: React.ReactNode }) {
+function HelpFeedbackOn({ desktop, children }: { desktop: boolean; children: React.ReactNode }) {
   const { user } = useAccount();
   const inbox = useInbox();
   const unseen = inbox?.unseenResponses ?? 0;
@@ -81,7 +82,7 @@ function HelpFeedbackOn({ children }: { children: React.ReactNode }) {
     setForm((f) => (f.kind === "sent" ? { kind: "editing", error: null } : f));
     setOpen(true);
   }, []);
-  const value = useMemo<HelpValue>(() => ({ open }), [open]);
+  const value = useMemo<HelpValue>(() => ({ open, isOpen, unseen }), [open, isOpen, unseen]);
 
   // A screenshot's preview is an object URL: let it go when the screenshot is replaced, removed or sent.
   const setDraft = useCallback((patch: Partial<FeedbackDraft>) => {
@@ -144,7 +145,7 @@ function HelpFeedbackOn({ children }: { children: React.ReactNode }) {
   return (
     <HelpContext.Provider value={value}>
       {children}
-      <HelpButton open={isOpen} unseen={unseen} onClick={() => (isOpen ? setOpen(false) : open())} />
+      {desktop && <HelpButton open={isOpen} unseen={unseen} onClick={() => (isOpen ? setOpen(false) : open())} />}
       <Modal
         open={isOpen}
         onClose={() => setOpen(false)}
@@ -226,12 +227,12 @@ function CrashReportsSetting() {
   );
 }
 
-/**
- * The button: small, round, at the bottom right, above the phone's dock. It
- * pops in a moment after the page, glows softly a few times, keeps glowing
- * while a team answer is unread, and turns into a close button while the
- * panel is open. Nothing moves for anyone who asked for reduced motion.
- */
+export function helpButtonLabel(unseen: number) {
+  if (!unseen) return "Help & feedback";
+  return `Help & feedback: the team answered ${unseen === 1 ? "a message" : `${unseen} messages`}`;
+}
+
+/** The desktop button also closes the panel while it is open. */
 function HelpButton({ open, unseen, onClick }: { open: boolean; unseen: number; onClick: () => void }) {
   const mounted = useMounted();
 
@@ -244,14 +245,13 @@ function HelpButton({ open, unseen, onClick }: { open: boolean; unseen: number; 
   }, []);
 
   if (!mounted) return null;
-  const label = unseen > 0 ? `Help & feedback: the team answered ${unseen === 1 ? "a message" : `${unseen} messages`}` : "Help & feedback";
+  const label = helpButtonLabel(unseen);
 
   return createPortal(
     <motion.div
       className={cn(
-        "fixed bottom-[calc(var(--bottom-nav-h,0px)+0.75rem)] right-4 z-40 sm:right-5 lg:bottom-5",
-        // Open: above the panel's scrim on a wider screen, as its close button; out of the sheet's way on a phone.
-        open && "max-sm:pointer-events-none max-sm:opacity-0 sm:z-[55]",
+        "fixed bottom-5 right-5 hidden lg:block",
+        open ? "z-[55]" : "z-40",
       )}
       initial={{ opacity: 0, scale: 0.5, y: 14 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}

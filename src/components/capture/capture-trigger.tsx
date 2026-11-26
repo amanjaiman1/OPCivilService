@@ -23,10 +23,19 @@ export function CaptureTrigger({ mobile = false }: { mobile?: boolean }) {
       onFocus={capture.prepare}
       className={cn(styles.trigger, mobile ? styles.mobile : styles.rail)}
     >
-      <span className={styles.disc} aria-hidden="true">
-        <Plus className={styles.plus} strokeWidth={2.5} />
-      </span>
-      {!mobile && <span className={styles.label}>Log today’s progress</span>}
+      {mobile ? (
+        <>
+          <Plus className={styles.plus} strokeWidth={2.5} aria-hidden />
+          <span className={styles.mobileLabel}>Log entry</span>
+        </>
+      ) : (
+        <>
+          <span className={styles.disc} aria-hidden="true">
+            <Plus className={styles.plus} strokeWidth={2.5} />
+          </span>
+          <span className={styles.label}>Log today’s progress</span>
+        </>
+      )}
     </button>
   );
   return mobile ? button : <Tooltip content="Log today’s progress (Alt+N)" describe={false}>{button}</Tooltip>;

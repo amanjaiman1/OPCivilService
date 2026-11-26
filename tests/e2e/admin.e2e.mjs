@@ -1221,7 +1221,7 @@ async function helpScenarios(browser, people) {
     check(log.map((e) => e.action).join(",") === "crash.resolved" && log[0].actor_id === owner.id, `resolving is audited: ${log.map((e) => e.action)}`);
   });
 
-  await scenario("24. Help & feedback: a round button for signed-in students only, and a message goes straight to the Feedback Center", async () => {
+  await scenario("24. Help & feedback: a dock action for signed-in students only, and a message goes straight to the Feedback Center", async () => {
     // Not for visitors, on the public site or in the demo.
     const visitor = await (await browser.newContext()).newPage();
     for (const path of ["/", "/reviews", "/login"]) {
@@ -1238,17 +1238,25 @@ async function helpScenarios(browser, people) {
     check(!(await visitor.getByTestId("help-feedback-button").count()), "the demo has the button");
     await visitor.close();
 
-    // A signed-in student on a phone: the help button sits above the entry button.
+    // A signed-in student can reach all three actions from the same mobile dock.
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
     const page = await ctx.newPage();
     await signInUi(page, s4.email, "/dashboard");
     await page.waitForURL(`${APP}/dashboard`);
     await intoApp(page, s4);
-    const button = page.getByTestId("help-feedback-button");
-    await button.waitFor();
-    await page.waitForTimeout(800);
-    const [b, entry] = [await button.boundingBox(), await page.getByRole("button", { name: "Log today’s progress", exact: true }).boundingBox()];
-    check(b && entry && b.y + b.height <= entry.y && b.x + b.width <= 390, `help overlaps entry: ${JSON.stringify({ b, entry })}`);
+    const dock = page.getByRole("navigation", { name: "Quick actions" });
+    const button = dock.getByTestId("help-feedback-button");
+    const home = dock.getByRole("link", { name: "Home" });
+    const entry = dock.getByRole("button", { name: "Log today’s progress", exact: true });
+    await entry.waitFor();
+    const [left, center, right] = await Promise.all([home.boundingBox(), entry.boundingBox(), button.boundingBox()]);
+    check(left && center && right && left.x >= 0 && right.x + right.width <= 390 &&
+      left.x + left.width <= center.x + 1 && center.x + center.width <= right.x + 1 &&
+      center.height > left.height && center.height > right.height, `dock layout: ${JSON.stringify({ left, center, right })}`);
+    await page.goto(`${APP}/journal`);
+    await home.click();
+    await page.waitForURL(`${APP}/dashboard`);
+    check((await home.getAttribute("aria-current")) === "page", "Home is marked current in the dock");
     await page.goto(`${APP}/journal`);
     await button.waitFor();
 
