@@ -83,7 +83,10 @@ export function Sidebar({
   // A count only where something is actually waiting: revisions due today or earlier.
   const due = today ? revisions.filter((r) => r.nextDue <= today).length : 0;
   const drawer = variant === "drawer";
-  const groups = useVisibleNavGroups(navGroups);
+  const visibleGroups = useVisibleNavGroups(navGroups);
+  const groups = drawer ? visibleGroups : visibleGroups
+    .map((group) => ({ ...group, items: group.items.filter((item) => item.href !== "/dashboard") }))
+    .filter((group) => group.items.length > 0);
 
   return (
     <aside

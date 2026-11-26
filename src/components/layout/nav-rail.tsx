@@ -5,6 +5,7 @@ import { warmOverlays } from "./overlays";
 import { usePathname } from "next/navigation";
 import {
   ChevronRight,
+  House,
   BedDouble,
   Sunrise,
   Palette,
@@ -148,6 +149,9 @@ export function NavRail({
       </div>
 
       <div className="mt-6 flex flex-col items-center gap-3">
+        {canAccessFeature(access, "dashboard") && (
+          <RailLink href="/dashboard" label="Home" icon={House} active={isActivePath(pathname, "/dashboard")} />
+        )}
         <CaptureTrigger />
         {mode !== "demo" && canAccessFeature(access, "life") && <SleepRailAction />}
       </div>
