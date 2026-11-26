@@ -416,7 +416,27 @@ Capture button to visible dialog (ms, first/next/next): ${timings.join(", ")}`);
   await page.keyboard.press("Alt+n");
   check(await workspace.count() === 1 && page.url() === subjects, "keyboard opening duplicated Capture or changed pages");
   await workspace.getByRole("button", { name: /Add a subject/ }).click();
-  await workspace.getByLabel("Subject 1", { exact: true }).selectOption({ label: "Polity & Governance" });
+  const subject = workspace.getByLabel("Subject 1", { exact: true });
+  const polity = await subject.selectOption({ label: "Polity & Governance" });
+  const topicSubject = workspace.getByLabel("Topic subject");
+  check(await topicSubject.inputValue() === polity[0], "Topics should default to the first subject entered");
+  await page.waitForFunction(() => {
+    const study = document.querySelector('[aria-label="Subject 1"]')?.closest("section");
+    return study && getComputedStyle(study, "::after").content !== "none";
+  });
+  await workspace.getByRole("button", { name: /Add a subject/ }).click();
+  const second = workspace.getByLabel("Subject 2", { exact: true });
+  const [other, third] = await second.evaluate((element, first) =>
+    Array.from(element.options).map((option) => option.value).filter((value) => value && value !== first), polity[0],
+  );
+  await second.selectOption(other);
+  check(await topicSubject.inputValue() === other, "Topics should follow the latest Study subject");
+  await topicSubject.selectOption(polity[0]);
+  check(await topicSubject.inputValue() === polity[0], "the topic subject can still be chosen manually");
+  await subject.selectOption(third);
+  check(await topicSubject.inputValue() === third, "editing an earlier Study row updates the default");
+  await subject.selectOption(polity[0]);
+  await workspace.getByRole("button", { name: "Remove subject 2" }).click();
   await workspace.getByLabel("Hours for subject 1", { exact: true }).fill("2");
   const hours = workspace.getByLabel("Hours for subject 1", { exact: true });
   await hours.fill("25");

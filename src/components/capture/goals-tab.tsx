@@ -1,5 +1,7 @@
 "use client";
 
+import { useEntryEditOutline } from "@/components/ui/entry-edit-outline";
+
 import { memo, useMemo, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
@@ -75,6 +77,7 @@ export function GoalsTab({
   onLinks,
   canLink,
   errors,
+  outlineEnabled = true,
 }: {
   date: ISODate;
   drafts: Record<string, GoalDraft>;
@@ -86,6 +89,7 @@ export function GoalsTab({
   canLink: boolean;
   /** Messages from the last save, by goal id. */
   errors: Record<string, string>;
+  outlineEnabled?: boolean;
 }) {
   const goals = useChronicle((s) => s.goals);
   const data = useGoalData();
@@ -99,6 +103,10 @@ export function GoalsTab({
       .map((g) => computeGoalProgress(g, data, today))
       .sort((a, b) => Number(b.goal.status === "Active") - Number(a.goal.status === "Active") || byPriority(a, b));
   }, [goals, drafts, links, date, data, today]);
+
+  const outline = useEntryEditOutline(Object.fromEntries(
+    shown.map(({ goal }) => [goal.id, [drafts[goal.id], links.includes(goal.id)]]),
+  ), date, outlineEnabled);
 
   const activeCount = goals.filter((g) => g.status === "Active").length;
   const updated = goals.filter((g) => goalUpdatedOn(g, date)).length;
@@ -152,6 +160,7 @@ export function GoalsTab({
               onLink={(on) => onLinks(on ? [...links, p.goal.id] : links.filter((x) => x !== p.goal.id))}
               canLink={canLink}
               error={errors[p.goal.id]}
+              outlineClassName={outline(p.goal.id)}
             />
           ))}
         </ul>
@@ -176,6 +185,7 @@ const GoalCaptureCard = memo(function GoalCaptureCard({
   onLink,
   canLink,
   error,
+  outlineClassName,
 }: {
   p: GoalProgress;
   date: ISODate;
@@ -185,6 +195,7 @@ const GoalCaptureCard = memo(function GoalCaptureCard({
   onLink: (on: boolean) => void;
   canLink: boolean;
   error?: string;
+  outlineClassName?: string;
 }) {
   const g = p.goal;
   const [open, setOpen] = useState(Boolean(draft));
@@ -209,7 +220,7 @@ const GoalCaptureCard = memo(function GoalCaptureCard({
       : "Not measured yet";
 
   return (
-    <li className="min-w-0">
+    <li className={cn("min-w-0", outlineClassName)}>
       <div className={cn("px-4 py-4 transition-colors sm:px-6 sm:py-5", pending && "bg-accent/[0.05]", error && "bg-danger/[0.06]")}>
         <div className="flex items-start gap-3">
           <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-xl", PILL[tone])} aria-hidden>

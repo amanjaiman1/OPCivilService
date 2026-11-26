@@ -12,6 +12,8 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { ADMIN_NAV, activeAdminItem } from "@/lib/platform/nav";
 import { ROLE_LABEL, opensAdminCenter } from "@/lib/platform/roles";
 import { cn } from "@/lib/utils";
+import { useAdminRefreshState } from "@/lib/platform/client";
+import { AdminLoader } from "./admin-loader";
 import { AttentionProvider, useAttention, type Section } from "./attention";
 import { useAdminActor } from "./admin-context";
 import { RefreshDataControl } from "./refresh-data";
@@ -125,6 +127,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const [drawer, setDrawer] = useState(false);
   const pathname = usePathname() ?? "/admin";
   const current = activeAdminItem(pathname);
+  const refresh = useAdminRefreshState();
+  const loading = refresh.running || refresh.resources.some((resource) =>
+    resource.state === "loading" && resource.id !== "role" && resource.id !== "attention",
+  );
   const { actor, can } = useAdminActor();
   // A page outside the role isn't mounted, so it doesn't ask for data the API would refuse.
   const outside = current && !can(current.permission);
@@ -219,7 +225,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
         <main className="app-stage no-scrollbar relative min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-[1400px] px-4 pb-12 pt-4 sm:px-6 lg:px-8 lg:pt-8 2xl:px-10">
+          {loading && !outside && (
+            <div className="pointer-events-none sticky top-0 z-20 flex h-0 justify-center px-4">
+              <AdminLoader compact label={refresh.running ? "Refreshing admin data…" : "Loading admin data…"} />
+            </div>
+          )}
+          <div className="mx-auto w-full max-w-[1400px] px-4 pb-12 pt-4 sm:px-6 lg:px-8 lg:pt-8 2xl:px-10" aria-busy={loading && !outside ? true : undefined}>
             {outside ? (
               <Card className="mx-auto mt-6 max-w-lg p-6 text-center sm:p-8">
                 <span className="mx-auto grid h-11 w-11 place-items-center rounded-2xl bg-paper/[0.05] text-paper/60">

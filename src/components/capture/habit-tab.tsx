@@ -1,5 +1,7 @@
 "use client";
 
+import { useEntryEditOutline } from "@/components/ui/entry-edit-outline";
+
 import { memo } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -34,6 +36,7 @@ export function HabitTab({
   onToggle,
   hasHabits,
   previewing,
+  outlineEnabled = true,
 }: {
   date: ISODate;
   /** The day's habits, evaluated with unsaved edits applied. */
@@ -46,11 +49,15 @@ export function HabitTab({
   hasHabits: boolean;
   /** Unsaved Day Update or Life edits are part of what's shown. */
   previewing: boolean;
+  outlineEnabled?: boolean;
 }) {
   const timeFormat = useTimeFormat();
   const manual = list.filter((t) => !isAutomatic(t.habit));
   const connected = list.filter((t) => isAutomatic(t.habit));
   const savedById = new Map(saved.map((h) => [h.id, h] as const));
+  const outline = useEntryEditOutline(Object.fromEntries(
+    list.map(({ habit }) => [habit.id, [drafts[habit.id]]]),
+  ), date, outlineEnabled);
 
   if (!hasHabits) {
     return (
@@ -73,7 +80,7 @@ export function HabitTab({
   const row = (t: HabitToday) => {
     const before = savedById.get(t.habit.id);
     const unsaved = t.habit.id in drafts && (before?.log?.[date] === true) !== drafts[t.habit.id];
-    return <HabitRow key={t.habit.id} item={t} date={date} unsaved={unsaved} onToggle={onToggle} timeFormat={timeFormat} />;
+    return <HabitRow key={t.habit.id} item={t} date={date} unsaved={unsaved} onToggle={onToggle} timeFormat={timeFormat} outlineClassName={outline(t.habit.id)} />;
   };
 
   return (
@@ -140,12 +147,14 @@ const HabitRow = memo(function HabitRow({
   unsaved,
   onToggle,
   timeFormat,
+  outlineClassName,
 }: {
   item: HabitToday;
   date: ISODate;
   unsaved: boolean;
   onToggle: (habitId: string, want: boolean) => void;
   timeFormat: ReturnType<typeof useTimeFormat>;
+  outlineClassName?: string;
 }) {
   const h = item.habit;
   const Icon = habitIcon(h);
@@ -161,7 +170,7 @@ const HabitRow = memo(function HabitRow({
   const canToggle = checkable && !settled && (!item.done || checked);
 
   return (
-    <li className="flex min-w-0 items-center gap-3 py-3">
+    <li className={cn("flex min-w-0 items-center gap-3 py-3", outlineClassName)}>
       <motion.span
         animate={{ scale: item.done ? [1, 1.12, 1] : 1 }}
         transition={{ duration: 0.3 }}
