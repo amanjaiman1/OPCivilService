@@ -373,7 +373,7 @@ async function phaseTwo(page, student) {
   await passSleepPromptIfShown(page);
   await passTourIfShown(page);
   await page.getByRole("heading", { name: "Home", exact: true }).waitFor();
-  const trigger = page.getByRole("button", { name: "Add entry", exact: true });
+  const trigger = page.getByRole("button", { name: "Log today’s progress", exact: true });
   const workspace = page.getByRole("dialog", { name: "Daily Capture", exact: true });
   const evidence = process.env.OPC_PHASE_EVIDENCE;
   await page.setViewportSize({ width: 1440, height: 960 });

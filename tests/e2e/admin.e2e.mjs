@@ -1247,7 +1247,7 @@ async function helpScenarios(browser, people) {
     const button = page.getByTestId("help-feedback-button");
     await button.waitFor();
     await page.waitForTimeout(800);
-    const [b, entry] = [await button.boundingBox(), await page.getByRole("button", { name: "Add entry", exact: true }).boundingBox()];
+    const [b, entry] = [await button.boundingBox(), await page.getByRole("button", { name: "Log today’s progress", exact: true }).boundingBox()];
     check(b && entry && b.y + b.height <= entry.y && b.x + b.width <= 390, `help overlaps entry: ${JSON.stringify({ b, entry })}`);
     await page.goto(`${APP}/journal`);
     await button.waitFor();
