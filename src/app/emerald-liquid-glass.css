@@ -103,7 +103,9 @@
 
 /* The backdrop on the root also covers pages outside the app shell. */
 html[data-surface="emerald-liquid-glass"] {
-  background: rgb(var(--ink)) var(--backdrop) fixed;
+  background-color: rgb(var(--ink));
+  background-image: var(--backdrop);
+  background-attachment: fixed;
 }
 
 html[data-surface="emerald-liquid-glass"] body { background-color: transparent; }
