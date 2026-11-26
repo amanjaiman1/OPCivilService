@@ -83,6 +83,8 @@ async function main() {
     ["supabase/tests/sync_safety.sql", "All sync safety checks passed"],
     ["supabase/tests/sleep_push_actions.sql", "All sleep push action checks passed"],
     ["supabase/tests/web_release.sql", "All web release checks passed"],
+    ["supabase/tests/native_push.sql", "All native push ownership checks passed"],
+    ["supabase/tests/native_bedtime.sql", "All native bedtime action checks passed"],
   ];
   for (const [file, expected] of checks) {
     const results = await db.exec(read(file));

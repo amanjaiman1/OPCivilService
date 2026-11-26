@@ -32,6 +32,7 @@ export interface TransportOptions {
   schema: number;
   /** This device's label for the account's trail (`lib/sync/device.ts`). */
   device: () => string;
+  accountSession?: () => Promise<string | null>;
 }
 
 export type DeviceEvent =
@@ -124,10 +125,11 @@ export function createSupabaseTransport(
   accountId: string,
   options: TransportOptions,
 ): SyncTransport {
-  const measure = syncUsage(client, accountId);
+  const measure = options.accountSession ? () => undefined : syncUsage(client, accountId);
   async function assertAccount(): Promise<void> {
-    const { data } = await client.auth.getSession();
-    const id = data.session?.user.id;
+    const id = options.accountSession
+      ? await options.accountSession()
+      : (await client.auth.getSession()).data.session?.user.id;
     // No usable session yet (an expired token while offline): retry later.
     if (!id) throw new SyncError("Waiting to reconnect your session.", "auth");
     if (id !== accountId) throw new SyncError("The signed-in account changed.", "stopped");

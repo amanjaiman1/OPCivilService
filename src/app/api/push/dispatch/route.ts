@@ -11,6 +11,7 @@ import {
   type Snapshot,
 } from "@/lib/push-dispatch";
 import type { DeliveryLog } from "@/lib/notifications";
+import { deliverNative, reconcileNativeReceipts, type NativeRecipient } from "@/lib/native-push";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -70,13 +71,11 @@ async function dispatch(request: Request) {
   }
 
   const vapid = configuredVapid();
-  if (!vapid) {
-    return NextResponse.json(
-      { error: "VAPID keys are not configured." },
-      { status: 503 },
-    );
+  const nativeToken = process.env.EXPO_PUSH_ACCESS_TOKEN;
+  if (!vapid && !nativeToken) {
+    return NextResponse.json({ error: "Push providers are not configured." }, { status: 503 });
   }
-  webpush.setVapidDetails(vapid.subject, vapid.publicKey, vapid.privateKey);
+  if (vapid) webpush.setVapidDetails(vapid.subject, vapid.publicKey, vapid.privateKey);
 
   const admin = adminClient();
   if (!admin) {
@@ -86,26 +85,37 @@ async function dispatch(request: Request) {
     );
   }
 
-  // Bounded and idempotent per UTC day, independent of the presence of subscribers.
-  await admin.rpc("platform_sample_footprint");
-  const { data: rows, error: rowsError } = await admin
-    .from("chronicle_push_subscriptions")
-    .select("id, user_id, endpoint, key_p256dh, key_auth, platform, timezone");
-  if (rowsError) {
-    return NextResponse.json({ error: rowsError.message }, { status: 500 });
+  const at = new Date();
+  const cutoff = new Date(at.getTime() - 45 * 24 * 60 * 60 * 1000).toISOString();
+  const [, webRows, nativeRows] = await Promise.all([
+    admin.rpc("platform_sample_footprint"),
+    vapid ? admin.from("chronicle_push_subscriptions")
+      .select("id, user_id, endpoint, key_p256dh, key_auth, platform, timezone") : null,
+    nativeToken ? admin.from("chronicle_native_push").select("device_id, user_id, token, platform, timezone")
+      .gt("updated_at", cutoff) : null,
+  ]);
+  if (webRows?.error) {
+    return NextResponse.json({ error: "Web recipients are unavailable." }, { status: 500 });
   }
-
-  const byUser = groupByUser<Row>((rows ?? []) as Row[]);
-  if (byUser.size === 0) {
-    return NextResponse.json({ ok: true, users: 0, sent: 0, skipped: [] });
+  // A rollout may configure Expo before applying the native registry migration.
+  // Keep Web Push available and expose this diagnostic without recipient data.
+  const nativeUnavailable = Boolean(nativeRows?.error);
+  const webByUser = groupByUser<Row>((webRows?.data ?? []) as Row[]);
+  const nativeByUser = groupByUser<NativeRecipient>((nativeRows?.data ?? []) as NativeRecipient[]);
+  const candidates = [...new Set([...webByUser.keys(), ...nativeByUser.keys()])];
+  if (nativeToken && !nativeUnavailable) {
+    await reconcileNativeReceipts(admin, nativeToken, at);
+    await admin.from("chronicle_native_push").delete().lt("updated_at", cutoff);
+    await admin.from("chronicle_native_bedtime_actions").delete().lt("expires_at", at.toISOString());
   }
-  const allowed = await admin.rpc("platform_push_eligible_users", { p_users: [...byUser.keys()] });
+  if (!candidates.length) {
+    return NextResponse.json({ ok: !nativeUnavailable, users: 0, sent: 0, skipped: [], nativeUnavailable });
+  }
+  const allowed = await admin.rpc("platform_push_eligible_users", { p_users: candidates });
   if (allowed.error || !Array.isArray(allowed.data)) {
     return NextResponse.json({ ok: false, error: "Account eligibility unavailable." }, { status: 503 });
   }
   const userIds = allowed.data as string[];
-  const eligible = new Set(userIds);
-  for (const userId of byUser.keys()) if (!eligible.has(userId)) byUser.delete(userId);
   if (!userIds.length) return NextResponse.json({ ok: true, users: 0, sent: 0, skipped: [] });
 
   /**
@@ -118,11 +128,11 @@ async function dispatch(request: Request) {
    * from `chronicle_dispatch_snapshots`, which is most of the egress this route
    * used to cost. An unavailable privacy projection pauses dispatch.
    */
-  const [trimmed, { data: logs }] = await Promise.all([
+  const [trimmed, { data: logs, error: logError }] = await Promise.all([
     admin.rpc("chronicle_dispatch_snapshots", { p_user_ids: userIds }),
     admin.from("chronicle_push_log").select("user_id, log").in("user_id", userIds),
   ]);
-  if (trimmed.error) {
+  if (trimmed.error || logError) {
     return NextResponse.json({ ok: false, error: "Notification data unavailable." }, { status: 503 });
   }
   const states = trimmed.data as { user_id: string; data: unknown }[] | null;
@@ -136,7 +146,6 @@ async function dispatch(request: Request) {
     logByUser.set(row.user_id as string, (row.log ?? {}) as Partial<DeliveryLog>);
   }
 
-  const at = new Date();
   // Only expired credentials are removed; active ones deduplicate dispatches.
   await admin.from("chronicle_sleep_push_actions").delete().lt("expires_at", at.toISOString());
   let sent = 0;
@@ -149,10 +158,12 @@ async function dispatch(request: Request) {
   const deadEndpoints: string[] = [];
   const logUpserts: { user_id: string; log: DeliveryLog; updated_at: string }[] = [];
 
-  for (const [userId, devices] of byUser) {
+  for (const userId of userIds) {
+    const devices = webByUser.get(userId) ?? [];
+    const native = nativeByUser.get(userId) ?? [];
     const decision = decideForUser(
       snapshots.get(userId),
-      devices,
+      [...devices, ...native],
       logByUser.get(userId),
       at,
     );
@@ -219,6 +230,12 @@ async function dispatch(request: Request) {
       }
     }
 
+    if (nativeToken && native.length) {
+      const accepted = await deliverNative(admin, nativeToken, native, decision.payload, decision.bedtime, at);
+      sent += accepted;
+      deliveredToAny ||= accepted > 0;
+    }
+
     /**
      * The log only advances if something actually arrived. Recording a send that
      * failed everywhere would burn the day's cap and the per-subject cooldown on
@@ -249,7 +266,8 @@ async function dispatch(request: Request) {
 
   return NextResponse.json({
     ok: true,
-    users: byUser.size,
+    users: userIds.length,
+    nativeUnavailable,
     sent,
     pruned: deadEndpoints.length,
     skipped,

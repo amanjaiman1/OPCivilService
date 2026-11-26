@@ -152,7 +152,7 @@ export function payloadForPlatform(
  */
 export function decideForUser(
   snapshot: Snapshot | null | undefined,
-  rows: SubscriptionRow[],
+  rows: Pick<SubscriptionRow, "timezone">[],
   log: Partial<DeliveryLog> | null | undefined,
   at: Date = new Date(),
 ): UserDecision {

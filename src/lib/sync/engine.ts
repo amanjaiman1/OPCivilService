@@ -284,6 +284,8 @@ export class SyncEngine {
     } catch {
       stored = null;
     }
+    // The active account can change while the platform opens its local database.
+    if (this.stopped) return false;
     const stamp = this.o.store.readStamp();
     if (stored && stamp === stored.version) {
       this.base = stored;

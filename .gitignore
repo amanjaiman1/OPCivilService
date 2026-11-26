@@ -34,3 +34,18 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Native builds and development configuration
+/apps/mobile/node_modules/
+/apps/mobile/.expo/
+/apps/mobile/dist/
+/apps/mobile/android/
+/apps/mobile/ios/
+/apps/mobile/.env
+/apps/mobile/.env.*
+!/apps/mobile/.env.example
+/apps/mobile/credentials.json
+/apps/mobile/*.jks
+/apps/mobile/*.p12
+/apps/mobile/*.mobileprovision
+/apps/mobile/google-services.json

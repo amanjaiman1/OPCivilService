@@ -1,0 +1,36 @@
+name: Mobile validation
+
+on:
+  pull_request:
+    paths:
+      - 'apps/mobile/**'
+      - 'src/lib/**'
+      - 'src/app/api/push/**'
+      - 'supabase/**'
+      - 'tests/native-contract.test.ts'
+      - '.github/workflows/mobile-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/mobile/package-lock.json
+      - run: npm ci
+      - run: npm --prefix apps/mobile ci
+      - run: npm --prefix apps/mobile run typecheck
+      - run: npm --prefix apps/mobile run lint
+      - run: npm --prefix apps/mobile run export:android -- --max-workers 2
+      - run: npm --prefix apps/mobile run export:ios -- --max-workers 2
+      - run: npm test
+      - run: npm run test:db

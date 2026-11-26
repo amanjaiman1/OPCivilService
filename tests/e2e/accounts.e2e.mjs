@@ -505,13 +505,17 @@ Capture button to visible dialog (ms, first/next/next): ${timings.join(", ")}`);
     await workspace.waitFor({ state: "detached" });
   }
 
-  const bedtime = new Date();
+  const now = new Date();
+  const bedtime = new Date(now);
   bedtime.setHours(22, 25, 0, 0);
+  // Choose an evening that won't move the browser beyond the mock token's lifetime.
+  if (bedtime > now) bedtime.setDate(bedtime.getDate() - 1);
   const night = new Date(bedtime);
   night.setDate(night.getDate() + 1);
   const nightDate = night.toLocaleDateString("en-CA");
   await page.clock.setFixedTime(bedtime);
   await page.goto(`${APP}/revision`);
+  await passSleepPromptIfShown(page);
   const bedAction = page.getByRole("button", { name: "Going to bed now" });
   const confirmBedtime = page.getByRole("dialog", { name: "Record bedtime?" });
   await bedAction.click();
