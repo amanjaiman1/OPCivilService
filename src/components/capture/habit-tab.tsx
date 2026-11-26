@@ -1,5 +1,7 @@
 "use client";
 
+import spotlight from "@/components/journal/journal-spotlight.module.css";
+
 import { memo } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -54,19 +56,21 @@ export function HabitTab({
 
   if (!hasHabits) {
     return (
-      <EmptyState
-        icon={<ListChecks className="h-5 w-5" />}
-        title="No habits yet"
-        description="Create a habit to check off each day, or connect one to your journal, sleep or revision so it fills in by itself."
-        action={
-          <Link
-            href="/habits?new=1"
-            className="inline-flex items-center gap-1.5 rounded-full border border-line px-3.5 py-2 text-[0.8rem] font-semibold text-paper hover:border-paper/25"
-          >
-            <Plus className="h-3.5 w-3.5" aria-hidden /> Create a habit
-          </Link>
-        }
-      />
+      <div className={spotlight.section}>
+        <EmptyState
+          icon={<ListChecks className="h-5 w-5" />}
+          title="No habits yet"
+          description="Create a habit to check off each day, or connect one to your journal, sleep or revision so it fills in by itself."
+          action={
+            <Link
+              href="/habits?new=1"
+              className="inline-flex items-center gap-1.5 rounded-full border border-line px-3.5 py-2 text-[0.8rem] font-semibold text-paper hover:border-paper/25"
+            >
+              <Plus className="h-3.5 w-3.5" aria-hidden /> Create a habit
+            </Link>
+          }
+        />
+      </div>
     );
   }
 
@@ -78,7 +82,7 @@ export function HabitTab({
 
   return (
     <div className="divide-y divide-line overflow-hidden rounded-3xl border border-line bg-paper/[0.015] shadow-soft">
-      <div className="flex flex-wrap items-center gap-4 p-4 sm:p-6">
+      <div className={cn("flex flex-wrap items-center gap-4 p-4 sm:p-6", spotlight.section)}>
         <RadialProgress
           value={summary.percent ?? 0}
           tone={summary.percent === 100 ? "positive" : "accent"}
@@ -112,7 +116,7 @@ export function HabitTab({
 
       {manual.length > 0 && (
         <section aria-labelledby="habits-manual" className="px-4 pt-4 sm:px-6">
-          <h2 id="habits-manual" className="text-[0.7rem] font-semibold uppercase tracking-[0.08em] text-paper/50">
+          <h2 id="habits-manual" className={cn("text-[0.7rem] font-semibold uppercase tracking-[0.08em] text-paper/50", spotlight.section)}>
             Check these off
           </h2>
           <div>
@@ -122,7 +126,7 @@ export function HabitTab({
       )}
       {connected.length > 0 && (
         <section aria-labelledby="habits-connected" className="px-4 pt-4 sm:px-6">
-          <h2 id="habits-connected" className="text-[0.7rem] font-semibold uppercase tracking-[0.08em] text-paper/50">
+          <h2 id="habits-connected" className={cn("text-[0.7rem] font-semibold uppercase tracking-[0.08em] text-paper/50", spotlight.section)}>
             Filled in from your records
           </h2>
           <div>
@@ -161,7 +165,7 @@ const HabitRow = memo(function HabitRow({
   const canToggle = checkable && !settled && (!item.done || checked);
 
   return (
-    <li className="flex min-w-0 items-center gap-3 py-3">
+    <li className={cn("flex min-w-0 items-center gap-3 py-3", spotlight.section)}>
       <motion.span
         animate={{ scale: item.done ? [1, 1.12, 1] : 1 }}
         transition={{ duration: 0.3 }}

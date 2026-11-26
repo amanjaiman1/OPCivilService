@@ -48,6 +48,8 @@ import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
+import { JournalSpotlight } from "@/components/journal/journal-spotlight";
+import spotlight from "@/components/journal/journal-spotlight.module.css";
 import { emptyEntry } from "@/components/journal/constants";
 import {
   JournalFields,
@@ -727,7 +729,7 @@ export function CaptureWorkspace({
                     animate={section === s.id ? { opacity: 1, y: 0 } : { opacity: 0, y: 6 }}
                     transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
                   >
-                    {panel(s.id)}
+                    {s.id === "day" ? panel(s.id) : <JournalSpotlight>{panel(s.id)}</JournalSpotlight>}
                   </motion.div>
                 )}
               </div>,
@@ -1014,7 +1016,7 @@ function CaptureTabs({
 
 function PanelIntro({ title, text, link }: { title: string; text: string; link?: { href: string; label: string } }) {
   return (
-    <div className="flex flex-wrap items-end justify-between gap-2 px-1">
+    <div className={cn("flex flex-wrap items-end justify-between gap-2 px-1", spotlight.section)}>
       <div className="min-w-0">
         <h2 className="text-[1.02rem] font-semibold tracking-snugg text-paper">{title}</h2>
         <p className="mt-0.5 text-[0.8rem] text-paper/60">{text}</p>
