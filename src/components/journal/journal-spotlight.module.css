@@ -54,18 +54,14 @@
   @media (prefers-reduced-motion: no-preference) {
     .section::before,
     .section::after {
-      transform: perspective(850px) translateY(0) rotateX(0deg) rotateY(0deg);
-      transition: opacity 160ms ease-out, transform 240ms cubic-bezier(0.2, 0.7, 0.25, 1);
+      transform: translate3d(0, 2px, 0);
+      transition: opacity 150ms ease-out, transform 220ms cubic-bezier(0.2, 0.7, 0.25, 1);
     }
 
     .section[data-spotlight-active]::before,
     .section[data-spotlight-active]::after {
-      transform:
-        perspective(850px)
-        translateY(-3px)
-        rotateX(var(--journal-tilt-x, 0deg))
-        rotateY(var(--journal-tilt-y, 0deg));
-      transition-duration: 160ms, 130ms;
+      transform: translate3d(0, -4px, 0);
+      transition-delay: 160ms;
     }
   }
 

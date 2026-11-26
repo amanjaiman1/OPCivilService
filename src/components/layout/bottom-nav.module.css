@@ -18,9 +18,6 @@
   --dock-active: color-mix(in srgb, rgb(var(--paper)) 23%, rgb(var(--accent)));
   --dock-badge-bg: var(--dock-active);
   --dock-badge-text: rgb(var(--card));
-  --dock-rose: #be315f;
-  --dock-pink: #e44b92;
-  --dock-rose-track: rgb(190 49 95 / 0.44);
   --dock-outline-track: rgb(var(--accent) / 0.24);
   --dock-outline-glow: rgb(var(--accent) / 0.55);
   --dock-outline-peak: var(--dock-active);
@@ -89,6 +86,7 @@
 
 .action {
   position: relative;
+  isolation: isolate;
   grid-row: 1;
   display: grid;
   place-items: center;
@@ -99,62 +97,26 @@
   touch-action: manipulation;
 }
 
-.selectionRing {
-  --dock-selection-inset: -2px;
-}
+.home { grid-column: 1; }
+.help { grid-column: -2; }
 
-.action.selectionRing { --dock-selection-inset: 4px; }
-
-.selectionRing::after {
+.action::before {
   position: absolute;
-  z-index: 1;
-  inset: var(--dock-selection-inset);
-  border: 2px solid var(--dock-pink, #ff84bd);
-  border-radius: inherit;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(110deg, #cdb9ff 8%, #feb8d8 92%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.72);
   opacity: 0;
   content: "";
   pointer-events: none;
 }
 
-.selectionRing:focus-visible::after { opacity: 1; }
+.home::before { border-radius: 999px 0 0 999px; }
 
-@supports (mask-composite: exclude) {
-  .selectionRing::after {
-    border: 0;
-    padding: 2px;
-    background: conic-gradient(
-      from var(--quick-actions-outline-angle, 0deg),
-      var(--dock-rose-track, rgb(255 80 139 / 0.44)),
-      var(--dock-rose, #ff508b) 24%,
-      var(--dock-pink, #ffabd5) 43%,
-      var(--dock-rose-track, rgb(255 80 139 / 0.44)) 61%,
-      var(--dock-pink, #ffabd5) 80%,
-      var(--dock-rose-track, rgb(255 80 139 / 0.44))
-    );
-    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    mask-composite: exclude;
-  }
-
-  @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
-    .selectionRing:hover::after { animation: dock-outline-sweep 1.8s linear infinite; }
-  }
+.help::before {
+  border-radius: 0 999px 999px 0;
+  background: linear-gradient(250deg, #cdb9ff 8%, #feb8d8 92%);
 }
-
-@media (hover: hover) and (pointer: fine) {
-  .selectionRing:hover::after { opacity: 1; }
-}
-
-@media (forced-colors: active) {
-  .selectionRing::after {
-    border: 2px solid Highlight;
-    background: none;
-    mask: none;
-    animation: none;
-  }
-}
-
-.home { grid-column: 1; }
-.help { grid-column: -2; }
 
 .action[aria-current="page"],
 .action:active {
@@ -208,6 +170,24 @@
   }
 }
 
-@media (hover: hover) {
-  .action:hover { color: var(--dock-active, #fff); }
+@media (hover: hover) and (pointer: fine) {
+  .action:hover { color: #321746; }
+  .action:hover::before { opacity: 1; }
+  .home:hover .house path:first-child { stroke: #e8c4f8; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .home::before { clip-path: inset(0 100% 0 0); }
+    .help::before { clip-path: inset(0 0 0 100%); }
+
+    .action::before { transition: clip-path 220ms ease-out, opacity 180ms ease; }
+    .action:hover::before { clip-path: inset(0); }
+  }
+}
+
+@media (forced-colors: active) and (hover: hover) and (pointer: fine) {
+  .action:hover { color: HighlightText; }
+  .action:hover::before {
+    forced-color-adjust: none;
+    background: Highlight;
+  }
 }

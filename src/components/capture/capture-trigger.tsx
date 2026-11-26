@@ -6,7 +6,7 @@ import { useCapture } from "./capture-provider";
 import { cn } from "@/lib/utils";
 import type { CaptureTarget } from "@/lib/capture-routing";
 
-export function CaptureTrigger({ className }: { className?: string }) {
+export function CaptureTrigger() {
   const capture = useCapture();
   if (!capture.available) return null;
   return (
@@ -20,7 +20,7 @@ export function CaptureTrigger({ className }: { className?: string }) {
       onClick={() => capture.open()}
       onPointerEnter={capture.prepare}
       onFocus={capture.prepare}
-      className={cn(styles.trigger, className)}
+      className={styles.trigger}
     >
       <Plus className={styles.plus} strokeWidth={2.5} aria-hidden />
       <span className={styles.label}>Log entry</span>
