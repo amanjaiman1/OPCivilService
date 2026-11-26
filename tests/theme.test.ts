@@ -14,14 +14,14 @@ beforeEach(() => {
   useChronicle.setState(blankChronicleState());
 });
 
-test("there are three themes, Light, Dark and Lavender, and Lavender is the default", () => {
+test("there are six themes and Lavender is the default", () => {
   assert.deepEqual(
     THEME_MODES.map((m) => m.label),
-    ["Light", "Dark", "Lavender"],
+    ["Light", "Dark", "Lavender", "Aurora Jade", "Royal Porcelain", "Dreamscape"],
   );
   assert.equal(DEFAULT_THEME_MODE, "lavender");
   assert.equal(store().themeMode, "lavender");
-  for (const m of ["light", "dark", "lavender"]) assert.equal(isThemeMode(m), true);
+  for (const { id } of THEME_MODES) assert.equal(isThemeMode(id), true);
   for (const retired of ["blue", "system", "ocean"]) assert.equal(isThemeMode(retired), false);
   assert.equal(surfaceFor("light"), "white");
   assert.equal(surfaceFor("dark"), "black");
@@ -44,6 +44,20 @@ test("Lavender is kept as it is: chosen, synced, painted before load, and read b
   const migrate = useChronicle.persist.getOptions().migrate!;
   const after = migrate({ themeMode: "lavender", journal: [] }, 15) as unknown as Record<string, unknown>;
   assert.equal(after.themeMode, "lavender");
+});
+
+test("new palette modes persist and round-trip through the account snapshot", () => {
+  setActiveAccount("account-a");
+  for (const mode of ["aurora-jade", "royal-porcelain", "dreamscape"] as const) {
+    store().setThemeMode(mode);
+    assert.equal(surfaceFor(mode), mode);
+    assert.equal(legacyThemeMode(mode), mode);
+    assert.equal(readKey("upsc-chronicle-theme:account-a"), mode);
+    assert.equal(normalizeSnapshot(readCloudSnapshot()).themeMode, mode);
+    useChronicle.setState(blankChronicleState());
+    store().applyCloudSnapshot({ themeMode: mode });
+    assert.equal(store().themeMode, mode);
+  }
 });
 
 test("a theme an older version saved opens as the theme it means today", () => {

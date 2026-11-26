@@ -2,7 +2,7 @@
 
 import { useId } from "react";
 import Link from "next/link";
-import { ArrowRight, Check, Clock, Flower2, Moon, Sun } from "lucide-react";
+import { ArrowRight, Check, Clock, Flower2, Gem, Leaf, Moon, Sparkles, Sun } from "lucide-react";
 import { useChronicle } from "@/lib/store";
 import { Modal } from "@/components/ui/modal";
 import { Switch } from "@/components/ui/switch";
@@ -11,7 +11,14 @@ import { deviceTimeFormat } from "@/lib/sleep";
 import { cn } from "@/lib/utils";
 import { InstallCard } from "@/components/pwa/install-prompt";
 
-const MODE_ICON: Record<ThemeMode, typeof Sun> = { light: Sun, dark: Moon, lavender: Flower2 };
+const MODE_ICON: Record<ThemeMode, typeof Sun> = {
+  light: Sun,
+  dark: Moon,
+  lavender: Flower2,
+  "aurora-jade": Leaf,
+  "royal-porcelain": Gem,
+  dreamscape: Sparkles,
+};
 
 /**
  * A miniature of a theme in its own colours and glass: the backdrop, a
@@ -66,7 +73,7 @@ export function AppearanceControls() {
     <div className="space-y-7">
       <section>
         <GroupTitle id={themeId}>Theme</GroupTitle>
-        <div className="grid grid-cols-3 gap-2 sm:gap-2.5" role="radiogroup" aria-labelledby={themeId}>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5" role="radiogroup" aria-labelledby={themeId}>
           {THEME_MODES.map((m) => {
             const active = mode === m.id;
             const Icon = MODE_ICON[m.id];
@@ -84,9 +91,9 @@ export function AppearanceControls() {
               >
                 <ThemePreview mode={m.id} reduced={reduce} />
                 <span className="flex min-w-0 items-center gap-1.5 px-0.5 text-[0.8rem] font-semibold text-paper sm:text-sm">
-                  <Icon className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">{m.label}</span>
+                  <Icon className="h-3.5 w-3.5 shrink-0" /> <span>{m.label}</span>
                 </span>
-                {/* On a phone the three cards are narrow: the preview says it. */}
+                {/* On a phone the cards are narrow: the preview says it. */}
                 <span className="hidden px-0.5 text-xs leading-snug text-paper/60 sm:block">{m.hint}</span>
                 {active && (
                   <span className="absolute right-3 top-3 grid h-5 w-5 place-items-center rounded-full bg-accent text-accent-fg sm:right-4 sm:top-4">

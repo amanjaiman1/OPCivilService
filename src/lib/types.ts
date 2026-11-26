@@ -9,11 +9,11 @@ export type ISODate = string; // "yyyy-mm-dd"
 export type Theme = "dark" | "light";
 
 /**
- * The theme the user picked: Lavender (the default), Light or Dark. Synced
+ * The appearance theme the user picked. Lavender is the default. Synced
  * with the account. Values older versions saved ("blue", "system") are read
  * by `legacyThemeMode` in lib/theme.ts.
  */
-export type ThemeMode = "light" | "dark" | "lavender";
+export type ThemeMode = "light" | "dark" | "lavender" | "aurora-jade" | "royal-porcelain" | "dreamscape";
 
 /** How clock times are shown: "11:30 PM" or "23:30". */
 export type TimeFormat = "12h" | "24h";

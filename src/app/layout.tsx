@@ -1,3 +1,4 @@
+import { THEME_SURFACES } from "@/lib/theme";
 import type { Metadata, Viewport } from "next";
 import { Comfortaa, Poppins } from "next/font/google";
 import "./globals.css";
@@ -100,7 +101,7 @@ const themeScript = `
       id = s && s.user && s.user.id ? s.user.id : null;
     }
     var get = function (k, f) { return (id && localStorage.getItem('upsc-chronicle-' + k + ':' + id)) || f; };
-    // Lavender, Light or Dark. Values older versions saved still paint the
+    // Older values still paint the
     // theme they now mean (lib/theme.ts, legacyThemeMode): Blue Glass is
     // Light, Auto is whichever theme the device shows, and a browser that
     // last ran the five-surface version has only the old key, where Ivory
@@ -109,8 +110,9 @@ const themeScript = `
     if (!mode) { var old = get('surface', ''); mode = old ? (old === 'white' ? 'light' : 'dark') : 'lavender'; }
     if (mode === 'system') mode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     if (mode === 'blue') mode = 'light';
-    if (mode !== 'dark' && mode !== 'light') mode = 'lavender';
-    d.setAttribute('data-surface', mode === 'dark' ? 'black' : mode === 'light' ? 'white' : 'lavender');
+    var surfaces = ${JSON.stringify(THEME_SURFACES)};
+    if (!Object.prototype.hasOwnProperty.call(surfaces, mode)) mode = 'lavender';
+    d.setAttribute('data-surface', surfaces[mode]);
     d.setAttribute('data-theme-mode', mode);
     if (get('transparency', '') === 'reduced') d.setAttribute('data-transparency', 'reduced');
   } catch (e) {

@@ -16,6 +16,9 @@ import {
   Droplets,
   Flame,
   Flower2,
+  Gem,
+  Leaf,
+  Sparkles,
   Footprints,
   Link2,
   Lock,
@@ -1164,7 +1167,14 @@ function NotifyDemo({ data, t0 }: DemoProps) {
   );
 }
 
-const MODE_ICON: Record<ThemeMode, typeof Sun> = { light: Sun, dark: Moon, lavender: Flower2 };
+const MODE_ICON: Record<ThemeMode, typeof Sun> = {
+  light: Sun,
+  dark: Moon,
+  lavender: Flower2,
+  "aurora-jade": Leaf,
+  "royal-porcelain": Gem,
+  dreamscape: Sparkles,
+};
 
 /** A theme in its own colours: the backdrop, a sidebar, a page and the accent. */
 function MiniTheme({ mode, reduced }: { mode: ThemeMode; reduced: boolean }) {
@@ -1173,7 +1183,7 @@ function MiniTheme({ mode, reduced }: { mode: ThemeMode; reduced: boolean }) {
       data-surface={surfaceFor(mode)}
       data-transparency={reduced ? "reduced" : undefined}
       aria-hidden
-      className="relative flex aspect-[16/11] w-full gap-1 overflow-hidden rounded-lg border border-line bg-ink p-1"
+      className="relative flex h-10 w-full gap-1 overflow-hidden rounded-lg border border-line bg-ink p-1"
     >
       <span className="app-backdrop absolute inset-0" />
       <span className="relative flex w-[24%] flex-col items-center gap-1 rounded-md border border-line bg-card py-1.5">
@@ -1211,7 +1221,7 @@ function ThemesDemo({ t0 }: DemoProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col justify-center gap-2">
-      <div role="radiogroup" aria-label="Theme" className="grid grid-cols-3 gap-2">
+      <div role="radiogroup" aria-label="Theme" className="grid min-h-0 grid-cols-3 gap-1.5 overflow-y-auto p-1">
         {THEME_MODES.map((m, i) => {
           const on = mode === m.id;
           const Icon = MODE_ICON[m.id];
@@ -1240,7 +1250,7 @@ function ThemesDemo({ t0 }: DemoProps) {
               <MiniTheme mode={m.id} reduced={reduced} />
               <span className="flex min-w-0 items-center gap-1 px-0.5 text-[0.64rem] font-semibold text-paper">
                 <Icon className="h-3 w-3 shrink-0" />
-                <span className="truncate">{m.label}</span>
+                <span className="leading-tight">{m.label}</span>
               </span>
               {on && (
                 <motion.span
