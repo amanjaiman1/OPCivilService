@@ -18,6 +18,9 @@
   --dock-active: color-mix(in srgb, rgb(var(--paper)) 23%, rgb(var(--accent)));
   --dock-badge-bg: var(--dock-active);
   --dock-badge-text: rgb(var(--card));
+  --dock-rose: #be315f;
+  --dock-pink: #e44b92;
+  --dock-rose-track: rgb(190 49 95 / 0.44);
   --dock-outline-track: rgb(var(--accent) / 0.24);
   --dock-outline-glow: rgb(var(--accent) / 0.55);
   --dock-outline-peak: var(--dock-active);
@@ -85,6 +88,7 @@
 }
 
 .action {
+  position: relative;
   grid-row: 1;
   display: grid;
   place-items: center;
@@ -93,6 +97,60 @@
   border-radius: inherit;
   color: var(--dock-icon, #a7a7ad);
   touch-action: manipulation;
+}
+
+.selectionRing {
+  --dock-selection-inset: -2px;
+}
+
+.action.selectionRing { --dock-selection-inset: 4px; }
+
+.selectionRing::after {
+  position: absolute;
+  z-index: 1;
+  inset: var(--dock-selection-inset);
+  border: 2px solid var(--dock-pink, #ff84bd);
+  border-radius: inherit;
+  opacity: 0;
+  content: "";
+  pointer-events: none;
+}
+
+.selectionRing:focus-visible::after { opacity: 1; }
+
+@supports (mask-composite: exclude) {
+  .selectionRing::after {
+    border: 0;
+    padding: 2px;
+    background: conic-gradient(
+      from var(--quick-actions-outline-angle, 0deg),
+      var(--dock-rose-track, rgb(255 80 139 / 0.44)),
+      var(--dock-rose, #ff508b) 24%,
+      var(--dock-pink, #ffabd5) 43%,
+      var(--dock-rose-track, rgb(255 80 139 / 0.44)) 61%,
+      var(--dock-pink, #ffabd5) 80%,
+      var(--dock-rose-track, rgb(255 80 139 / 0.44))
+    );
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+  }
+
+  @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+    .selectionRing:hover::after { animation: dock-outline-sweep 1.8s linear infinite; }
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .selectionRing:hover::after { opacity: 1; }
+}
+
+@media (forced-colors: active) {
+  .selectionRing::after {
+    border: 2px solid Highlight;
+    background: none;
+    mask: none;
+    animation: none;
+  }
 }
 
 .home { grid-column: 1; }

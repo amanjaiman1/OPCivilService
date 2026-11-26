@@ -37,12 +37,12 @@ export function QuickActionsDock() {
             href="/dashboard"
             aria-label="Home"
             aria-current={homeActive ? "page" : undefined}
-            className={`${styles.action} ${styles.home}`}
+            className={`${styles.action} ${styles.home} ${styles.selectionRing}`}
           >
             <House aria-hidden className={styles.house} />
           </AppLink>
         )}
-        {available && <CaptureTrigger />}
+        {available && <CaptureTrigger className={styles.selectionRing} />}
         {help && (
           <button
             type="button"
@@ -51,7 +51,7 @@ export function QuickActionsDock() {
             aria-expanded={help.isOpen}
             data-testid="help-feedback-button"
             onClick={() => help.open()}
-            className={`${styles.action} ${styles.help}`}
+            className={`${styles.action} ${styles.help} ${styles.selectionRing}`}
           >
             <span className={styles.helpIcon} aria-hidden="true">
               <MessageCircleQuestion />

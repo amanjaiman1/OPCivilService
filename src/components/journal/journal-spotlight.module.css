@@ -1,92 +1,81 @@
 @media (min-width: 1024px) and (any-hover: hover) and (any-pointer: fine) {
   .form {
-    --spotlight-glow: 0.31;
-    --spotlight-wash: 0.1;
-    --spotlight-edge: 0.92;
+    --glass-tint: 0.16;
+    --glass-sheen: 0.76;
+    --glass-shadow: 0.2;
   }
 
   :global(html[data-surface="black"]) .form {
-    --spotlight-glow: 0.24;
-    --spotlight-wash: 0.075;
-    --spotlight-edge: 0.84;
+    --glass-tint: 0.12;
+    --glass-sheen: 0.09;
+    --glass-shadow: 0.58;
   }
 
   .section {
-    --spotlight-inset: 2px;
+    --glass-inset: 4px;
     position: relative;
-  }
-
-  .dialog .section { --spotlight-inset: -7px -9px; }
-  .dialog .contained { --spotlight-inset: 2px; }
-
-  .section[data-spotlight-active] {
     isolation: isolate;
   }
 
-  .section[data-spotlight-active]::before,
-  .section[data-spotlight-active]::after {
+  .dialog .section { --glass-inset: -6px -8px; }
+  .dialog .contained { --glass-inset: 4px; }
+
+  .section::before,
+  .section::after {
     position: absolute;
-    inset: var(--spotlight-inset);
+    inset: var(--glass-inset);
+    z-index: -1;
     border-radius: 0.875rem;
+    opacity: 0;
     content: "";
     pointer-events: none;
   }
 
-  .section[data-spotlight-active]::before {
-    z-index: -1;
+  .section::before {
     background:
-      radial-gradient(ellipse 15rem 12rem at var(--spotlight-x, 50%) var(--spotlight-y, 50%),
-        rgb(var(--accent) / var(--spotlight-glow)), transparent 77%),
-      radial-gradient(ellipse 31rem 19rem at var(--spotlight-x, 50%) var(--spotlight-y, 50%),
-        rgb(var(--accent) / var(--spotlight-wash)), transparent 78%),
-      linear-gradient(145deg, rgb(var(--accent) / 0.08), transparent 57%);
-    box-shadow: inset 0 0 0 1px rgb(var(--accent) / 0.26), inset 0 1px 14px rgb(var(--accent) / 0.06);
+      linear-gradient(125deg, rgb(255 255 255 / var(--glass-sheen)), transparent 62%),
+      linear-gradient(155deg, rgb(var(--card)), color-mix(in srgb, rgb(var(--card)), rgb(var(--accent) / var(--glass-tint)) 44%));
+    box-shadow:
+      0 12px 22px -10px rgb(var(--shadow) / var(--glass-shadow)),
+      0 6px 18px -7px rgb(var(--accent) / 0.25),
+      inset 0 1px 1px rgb(255 255 255 / 0.35);
   }
 
-  .section[data-spotlight-active]::after {
-    z-index: 1;
+  .section::after {
     border: 1px solid rgb(var(--accent) / 0.46);
+    background: linear-gradient(162deg, rgb(var(--accent) / 0.17), transparent 29%);
   }
 
-  @supports (mask-composite: exclude) {
-    .section[data-spotlight-active]::after {
-      inset: var(--spotlight-inset);
-      border: 0;
-      padding: 4px;
-      background:
-        radial-gradient(ellipse 10rem 7rem at var(--spotlight-x, 50%) var(--spotlight-y, 50%),
-          rgb(var(--accent) / var(--spotlight-edge)), transparent 66%),
-        radial-gradient(circle, rgb(var(--accent) / 0.42) 0.65px, transparent 1px) 0 0 / 4px 4px;
-      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-      mask-composite: exclude;
-    }
+  .section[data-spotlight-active]::before,
+  .section[data-spotlight-active]::after {
+    opacity: 1;
   }
 
   @media (prefers-reduced-motion: no-preference) {
-    .section[data-spotlight-active]::before,
-    .section[data-spotlight-active]::after {
-      animation: journal-spotlight-in 160ms ease-out both;
+    .section::before,
+    .section::after {
+      transform: perspective(850px) translateY(0) rotateX(0deg) rotateY(0deg);
+      transition: opacity 160ms ease-out, transform 240ms cubic-bezier(0.2, 0.7, 0.25, 1);
     }
-  }
 
-  @media (prefers-reduced-motion: reduce) {
     .section[data-spotlight-active]::before,
     .section[data-spotlight-active]::after {
-      --spotlight-x: 50%;
-      --spotlight-y: 50%;
+      transform:
+        perspective(850px)
+        translateY(-3px)
+        rotateX(var(--journal-tilt-x, 0deg))
+        rotateY(var(--journal-tilt-y, 0deg));
+      transition-duration: 160ms, 130ms;
     }
   }
 
   @media (forced-colors: active) {
-    .section[data-spotlight-active]::after {
+    .section::before { content: none; }
+
+    .section::after {
       border: 1px solid Highlight;
       background: none;
-      mask: none;
+      transform: none;
     }
   }
-}
-
-@keyframes journal-spotlight-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
 }
