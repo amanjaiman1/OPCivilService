@@ -1,60 +1,56 @@
-/* Emerald keeps the atmosphere behind the app and reserves optical glass for controls. */
+/* The white canvas stays matte and reserves optical glass for controls. */
 [data-surface="emerald-liquid-glass"] {
-  color-scheme: dark;
-  --ink: 3 34 17;
-  --card: 16 55 32;
-  --card-2: 20 70 40;
-  --paper: 240 248 241;
-  --line: 113 155 119;
-  --shadow: 2 25 13;
-  --scrim: 2 25 13;
+  color-scheme: light;
+  --ink: 255 255 255;
+  --card: 255 255 255;
+  --card-2: 247 247 247;
+  --paper: 0 0 0;
+  --line: 96 96 96;
+  --shadow: 0 0 0;
+  --scrim: 0 0 0;
   --wash: 0.65;
-  --aura-1: 99 179 107;
-  --aura-2: 130 167 124;
-  --accent: 8 196 60;
-  --accent-2: 139 218 157;
-  --accent-ink: 181 245 190;
-  --accent-fg: 3 34 17;
+  --aura-1: 220 220 220;
+  --aura-2: 240 240 240;
+  --accent: 20 116 58;
+  --accent-2: 21 107 55;
+  --accent-ink: 17 92 48;
+  --accent-fg: 255 255 255;
   --accent-glow: 0.12;
-  --selection: 123 223 142;
-  --positive: 159 235 175;
-  --warning: 249 210 147;
-  --danger: 255 170 175;
-  --info: 196 237 204;
-  --vivid-up: 123 223 142;
-  --vivid-down: 247 148 160;
-  --bloom-1: 139 218 157;
-  --bloom-2: 218 244 221;
-  --bloom-3: 111 192 128;
-  --bloom-4: 174 218 148;
-  --bloom-5: 169 219 203;
-  --bloom-6: 94 149 115;
+  --selection: 72 148 95;
+  --positive: 21 107 55;
+  --warning: 126 75 13;
+  --danger: 158 28 46;
+  --info: 30 81 55;
+  --vivid-up: 72 148 95;
+  --vivid-down: 167 44 59;
+  --bloom-1: 21 107 55;
+  --bloom-2: 100 151 114;
+  --bloom-3: 59 120 76;
+  --bloom-4: 85 130 66;
+  --bloom-5: 61 127 109;
+  --bloom-6: 58 91 72;
   --quiet: 0.81;
   --quiet-canvas: 0.86;
   --gridline: 0.1;
-  --backdrop:
-    radial-gradient(80% 105% at 12% 5%, rgb(99 179 107 / 0.8), transparent 71%),
-    radial-gradient(62% 79% at 20% 41%, rgb(130 167 124 / 0.68), transparent 72%),
-    radial-gradient(66% 82% at 100% 104%, rgb(3 34 17), transparent 89%),
-    linear-gradient(154deg, #449252 0%, #155e2b 45%, #08441f 73%, #032211 100%);
+  --backdrop: none;
 
-  --shell-bg: rgb(3 29 16 / 0.52);
-  --shell-border: rgb(235 255 237 / 0.22);
+  --shell-bg: rgb(255 255 255 / 0.52);
+  --shell-border: rgb(38 38 38 / 0.22);
   --shell-shadow: 0 8px 24px -18px rgb(var(--shadow) / 0.55);
   --shell-filter: none;
-  --stage-bg: rgb(3 32 17 / 0.44);
-  --stage-border: rgb(235 255 237 / 0.19);
+  --stage-bg: rgb(255 255 255 / 0.44);
+  --stage-border: rgb(38 38 38 / 0.19);
   --stage-shadow: none;
   --stage-image: none;
-  --drawer-bg: rgb(10 47 27 / 0.98);
+  --drawer-bg: rgb(255 255 255 / 0.98);
   --drawer-border: var(--shell-border);
-  --nav-hover: rgb(255 255 255 / 0.12);
-  --nav-active: rgb(255 255 255 / 0.15);
+  --nav-hover: rgb(0 0 0 / 0.05);
+  --nav-active: rgb(0 0 0 / 0.08);
   --nav-active-fg: rgb(var(--paper));
-  --nav-active-ring: rgb(239 255 242 / 0.44);
+  --nav-active-ring: rgb(24 24 24 / 0.44);
   --glass-tint: var(--card);
   --glass-inner-tint: var(--card-2);
-  --glass-edge: 235 255 237;
+  --glass-edge: 38 38 38;
   --glass-panel-a: 0.25;
   --glass-inner-a: 0.18;
   --glass-chrome-a: 0.48;
@@ -62,11 +58,11 @@
   --glass-field: 255 255 255;
   --glass-field-a: 0.06;
   --glass-field-focus-a: 0.12;
-  --glass-field-border: 230 255 234;
+  --glass-field-border: 50 50 50;
   --glass-field-border-a: 0.45;
   --glass-edge-a: 0.2;
   --glass-rim-a: 0.11;
-  --glass-outline: 235 255 237;
+  --glass-outline: 38 38 38;
   --glass-outline-a: 0.06;
   --glass-glint: none;
   --glass-sheen: none;
@@ -79,24 +75,24 @@
 
   --emerald-duration: 300ms;
   --emerald-curve: cubic-bezier(0.22, 1, 0.36, 1);
-  --emerald-focus: #edfff0;
+  --emerald-focus: #111;
   --emerald-glass-sheen:
     radial-gradient(100% 85% at 2% 0%, rgb(255 255 255 / 0.18), transparent 58%),
-    linear-gradient(155deg, rgb(255 255 255 / 0.12), transparent 32% 68%, rgb(255 255 255 / 0.065));
+    linear-gradient(155deg, rgb(255 255 255 / 0.12), transparent 32% 68%, rgb(0 0 0 / 0.055));
   --emerald-glass-shade:
     inset 1px 1px 0 rgb(255 255 255 / 0.24),
-    inset -1px -1px 0 rgb(255 255 255 / 0.09),
+    inset -1px -1px 0 rgb(0 0 0 / 0.12),
     inset 0 -8px 11px -11px rgb(255 255 255 / 0.54),
     0 5px 12px -8px rgb(var(--shadow) / 0.68);
   --select-sheen: var(--emerald-glass-sheen);
   --lg-fill: rgb(255 255 255 / 0.065);
-  --lg-fill-hover: rgb(255 255 255 / 0.12);
-  --lg-border: rgb(240 255 241 / 0.3);
+  --lg-fill-hover: rgb(0 0 0 / 0.055);
+  --lg-border: rgb(48 48 48 / 0.3);
   --lg-sheen: var(--emerald-glass-sheen);
   --lg-shadow: var(--emerald-glass-shade);
   --lg-tint-sheen: var(--emerald-glass-sheen);
   --lg-tint-rims: var(--emerald-glass-shade);
-  --lg-track: rgb(8 31 17 / 0.35);
+  --lg-track: rgb(24 24 24 / 0.35);
   --lg-track-shadow: inset 0 1px 3px rgb(var(--shadow) / 0.4);
   --lg-blur: blur(6px) saturate(1.08);
 }
@@ -122,20 +118,20 @@ html[data-surface="emerald-liquid-glass"] :is(
 }
 
 html[data-surface="emerald-liquid-glass"] .flap {
-  --flap-from: 42 108 64;
-  --flap-to: 13 55 32;
-  --flap-glow: 26 74 44;
-  --flap-rim: 0 0 0 1px rgb(235 255 237 / 0.2);
+  --flap-from: 255 255 255;
+  --flap-to: 225 225 225;
+  --flap-glow: 190 190 190;
+  --flap-rim: 0 0 0 1px rgb(38 38 38 / 0.2);
 }
 
 html[data-surface="emerald-liquid-glass"] .tour-root {
-  --tour-glow-1: 99 179 107;
-  --tour-glow-2: 130 167 124;
-  --tour-glow-3: 57 133 76;
+  --tour-glow-1: 220 220 220;
+  --tour-glow-2: 240 240 240;
+  --tour-glow-3: 210 210 210;
   --tour-glow-a: 0.09;
   --tour-glare: 0.14;
   --tour-shine-a: 0.17;
-  background-image: linear-gradient(rgb(3 32 17 / 0.5), rgb(3 32 17 / 0.5)), var(--backdrop);
+  background-image: var(--backdrop);
 }
 
 /* Keep blur on the dock and overlays. Scrolling lists reuse the same optics
@@ -168,16 +164,16 @@ html[data-surface="emerald-liquid-glass"] :is(button, a)[aria-pressed="true"],
 html[data-surface="emerald-liquid-glass"] :is(button, a)[aria-selected="true"],
 html[data-surface="emerald-liquid-glass"] :is(button, a)[aria-current="page"]:not([data-quick-actions] *),
 html[data-surface="emerald-liquid-glass"] button[aria-checked="true"] {
-  border-color: rgb(241 255 242 / 0.52);
-  background-color: rgb(255 255 255 / 0.12);
+  border-color: rgb(32 32 32 / 0.52);
+  background-color: rgb(0 0 0 / 0.045);
 }
 
 html[data-surface="emerald-liquid-glass"] button[role="switch"] > span {
-  background-color: rgb(235 250 237 / 0.68);
+  background-color: rgb(115 115 115 / 0.68);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.8), 0 1px 3px rgb(var(--shadow) / 0.44);
 }
 html[data-surface="emerald-liquid-glass"] button[role="switch"][aria-checked="true"] > span {
-  background-color: rgb(243 255 244);
+  background-color: rgb(25 25 25);
 }
 
 html[data-surface="emerald-liquid-glass"] :is(
@@ -219,7 +215,7 @@ html[data-surface="emerald-liquid-glass"] :is(button, a[href], summary, input, s
     button, summary, a:is(.lg-clear, .glass-ghost, .bg-accent, .bg-paper, .rounded-full)
   ):hover:not(:disabled, [aria-disabled="true"], [data-quick-actions] *) {
     background-color: var(--lg-fill-hover);
-    border-color: rgb(239 255 240 / 0.58);
+    border-color: rgb(32 32 32 / 0.58);
     box-shadow: var(--emerald-glass-shade), inset 0 1px 0 rgb(255 255 255 / 0.43);
   }
 }
@@ -234,36 +230,36 @@ html[data-surface="emerald-liquid-glass"] :is(button, a[href], summary, input, s
 
 @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
   [data-surface="emerald-liquid-glass"] {
-    --lg-fill: rgb(22 69 41 / 0.96);
-    --lg-fill-hover: rgb(30 83 50 / 0.98);
+    --lg-fill: rgb(245 245 245 / 0.96);
+    --lg-fill-hover: rgb(232 232 232 / 0.98);
   }
 }
 
 [data-surface="emerald-liquid-glass"][data-transparency="reduced"] {
-  --shell-bg: rgb(11 44 26);
-  --stage-bg: rgb(11 43 26);
-  --drawer-bg: rgb(11 44 26);
+  --shell-bg: rgb(255 255 255);
+  --stage-bg: rgb(255 255 255);
+  --drawer-bg: rgb(255 255 255);
   --glass-overlay-a: 1;
-  --glass-field: 18 64 37;
+  --glass-field: 245 245 245;
   --glass-field-a: 1;
   --glass-field-focus-a: 1;
-  --lg-fill: rgb(22 69 41);
-  --lg-fill-hover: rgb(30 83 50);
+  --lg-fill: rgb(245 245 245);
+  --lg-fill-hover: rgb(232 232 232);
   --lg-blur: none;
   --glass-overlay-filter: none;
 }
 
 @media (prefers-reduced-transparency: reduce) {
   [data-surface="emerald-liquid-glass"] {
-    --shell-bg: rgb(11 44 26);
-    --stage-bg: rgb(11 43 26);
-    --drawer-bg: rgb(11 44 26);
+    --shell-bg: rgb(255 255 255);
+    --stage-bg: rgb(255 255 255);
+    --drawer-bg: rgb(255 255 255);
     --glass-overlay-a: 1;
-    --glass-field: 18 64 37;
+    --glass-field: 245 245 245;
     --glass-field-a: 1;
     --glass-field-focus-a: 1;
-    --lg-fill: rgb(22 69 41);
-    --lg-fill-hover: rgb(30 83 50);
+    --lg-fill: rgb(245 245 245);
+    --lg-fill-hover: rgb(232 232 232);
     --lg-blur: none;
     --glass-overlay-filter: none;
   }

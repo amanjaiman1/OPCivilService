@@ -61,7 +61,7 @@ export const THEME_MODES: ThemeModeMeta[] = [
   { id: "aurora-jade", label: "Aurora Jade", hint: "Mint glass and a fresh jade accent" },
   { id: "royal-porcelain", label: "Royal Porcelain", hint: "Pearl white glass over warm champagne" },
   { id: "dreamscape", label: "Dreamscape", hint: "Pink, orchid and periwinkle glass" },
-  { id: "emerald-liquid-glass", label: "Emerald Liquid Glass", hint: "Clear glass controls over a deep green atmosphere" },
+  { id: "emerald-liquid-glass", label: "Emerald Liquid Glass", hint: "Clear glass controls on pure white with emerald accents" },
 ];
 
 export function isThemeMode(v: unknown): v is ThemeMode {
