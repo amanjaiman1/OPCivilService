@@ -2078,7 +2078,7 @@ html[data-quick-actions-dock] {
 
 @media (min-width: 1024px) {
   :root {
-    --quick-actions-height: 6.25rem;
+    --quick-actions-height: 5.625rem;
     --quick-actions-bottom: max(1rem, env(safe-area-inset-bottom));
   }
 }
