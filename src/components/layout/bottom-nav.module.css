@@ -7,83 +7,32 @@
 .wrap {
   --dock-center-width: 6rem;
   --dock-glide: 200ms;
+  --dock-edge: rgb(var(--paper) / 0.2);
+  --dock-shadow: rgb(var(--shadow) / 0.18);
+  --dock-icon: color-mix(in srgb, rgb(var(--paper)) 82%, rgb(var(--accent)));
+  --dock-active: color-mix(in srgb, rgb(var(--paper)) 58%, rgb(var(--accent)));
+  --dock-badge-bg: var(--dock-active);
+  --dock-badge-text: rgb(var(--card));
+  --dock-outline-track: rgb(var(--paper) / 0.15);
+  --dock-outline-glow: rgb(var(--accent) / 0.36);
+  --dock-outline-peak: rgb(var(--paper) / 0.5);
+  --dock-lens-rim: rgb(var(--paper) / 0.32);
+  --dock-lens-glint: rgb(255 255 255 / 0.62);
+  --dock-lens-tint: rgb(var(--accent) / 0.1);
+  --dock-lens-text: var(--dock-active);
   bottom: var(--quick-actions-bottom);
   height: var(--quick-actions-height);
 }
 
-:global(html[data-surface="lavender"]) .wrap,
-:global(html[data-surface="white"]) .wrap,
-:global(html[data-surface="aurora-jade"]) .wrap,
-:global(html[data-surface="royal-porcelain"]) .wrap,
-:global(html[data-surface="dreamscape"]) .wrap {
-  --dock-bg: linear-gradient(160deg, rgb(var(--card)), color-mix(in srgb, rgb(var(--card)) 79%, rgb(var(--accent))));
-  --dock-edge: color-mix(in srgb, rgb(var(--card)) 88%, rgb(var(--accent)));
-  --dock-shadow: rgb(var(--accent) / 0.22);
-  --dock-icon: color-mix(in srgb, rgb(var(--paper)) 54%, rgb(var(--accent)));
-  --dock-active: color-mix(in srgb, rgb(var(--paper)) 23%, rgb(var(--accent)));
-  --dock-badge-bg: var(--dock-active);
-  --dock-badge-text: rgb(var(--card));
-  --dock-outline-track: rgb(var(--accent) / 0.24);
-  --dock-outline-glow: rgb(var(--accent) / 0.55);
-  --dock-outline-peak: var(--dock-active);
-
-  --dock-lens-rim: rgb(var(--card) / 0.92);
-  --dock-lens-base: color-mix(in srgb, rgb(var(--accent) / 0.25) 60%, rgb(var(--card) / 0.55));
-  --dock-lens-solid: color-mix(in srgb, rgb(var(--card)) 89%, rgb(var(--accent)));
-  --dock-lens-core: color-mix(in srgb, rgb(var(--card) / 0.9) 70%, rgb(var(--accent) / 0.42));
-  --dock-lens-glint: rgb(var(--card) / 0.95);
-  --dock-lens-tint: rgb(var(--accent) / 0.3);
-  --dock-lens-text: var(--dock-active);
-}
-
 :global(html[data-surface="emerald-liquid-glass"]) .wrap {
-  /* Keep the middle clear, with light and shade at the glass edges. */
-  --dock-bg: linear-gradient(152deg, rgb(255 255 255 / 0.16), transparent 26% 78%, rgb(0 0 0 / 0.035));
-  --dock-edge: rgb(65 65 65 / 0.36);
-  --dock-shadow: rgb(0 0 0 / 0.18);
   --dock-icon: rgb(22 22 22);
-  --dock-active: rgb(0 0 0);
-  --dock-badge-bg: rgb(30 30 30);
-  --dock-badge-text: rgb(var(--ink));
-  --dock-outline-track: rgb(32 32 32 / 0.11);
+  --dock-active: #000;
   --dock-outline-glow: rgb(32 32 32 / 0.28);
-  --dock-outline-peak: rgb(40 40 40 / 0.56);
-  --dock-lens-rim: rgb(60 60 60 / 0.56);
-  --dock-lens-base: rgb(255 255 255 / 0.035);
-  --dock-lens-filter: blur(5px) saturate(1.08);
-  --dock-lens-solid: #eee;
-  --dock-lens-core: rgb(0 0 0 / 0.035);
-  --dock-lens-glint: rgb(255 255 255 / 0.44);
   --dock-lens-tint: rgb(255 255 255 / 0.12);
-  --dock-lens-text: rgb(0 0 0);
-}
-
-:global(html[data-surface="emerald-liquid-glass"]) .dock {
-  -webkit-backdrop-filter: blur(4px) saturate(1.08);
-  backdrop-filter: blur(4px) saturate(1.08);
 }
 
 :global(html[data-surface="emerald-liquid-glass"]) .dock::after {
-  /* The fixed rim stays lit. The lens supplies the motion. */
   animation: none;
-}
-
-:global(html[data-surface="emerald-liquid-glass"]) .house path:first-child {
-  stroke: #fff;
-}
-
-:global(html[data-surface="emerald-liquid-glass"][data-transparency="reduced"]) .dock {
-  --dock-bg: #f8f8f8;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-}
-
-@media (prefers-reduced-transparency: reduce) {
-  :global(html[data-surface="emerald-liquid-glass"]) .dock {
-    --dock-bg: #f8f8f8;
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
 }
 
 .dock {
@@ -94,7 +43,10 @@
   align-items: center;
   width: min(15.75rem, calc(100% - 2rem));
   border-radius: 999px;
-  background: var(--dock-bg, #0b0b0c);
+  /* Only the rim catches light. The page supplies the color through the center. */
+  background: linear-gradient(152deg, rgb(255 255 255 / 0.18), transparent 24% 78%, rgb(var(--paper) / 0.035));
+  -webkit-backdrop-filter: blur(4px) saturate(1.16);
+  backdrop-filter: blur(4px) saturate(1.16);
   box-shadow: 0 12px 30px var(--dock-shadow, rgb(0 0 0 / 0.28)), inset 0 1px 0 var(--dock-edge, rgb(255 255 255 / 0.11));
   pointer-events: auto;
 }
@@ -151,10 +103,10 @@
   transform: translate(-50%, -50%);
   border: 1px solid var(--dock-lens-rim, rgb(235 247 255 / 0.62));
   border-radius: 50%;
-  background: var(--dock-lens-base, rgb(24 25 28 / 0.3));
-  -webkit-backdrop-filter: var(--dock-lens-filter, blur(12px) saturate(1.3));
-  backdrop-filter: var(--dock-lens-filter, blur(12px) saturate(1.3));
-  box-shadow: inset 0 0 13px var(--dock-lens-glint, rgb(239 247 255 / 0.42)), 0 7px 18px var(--dock-shadow, rgb(0 0 0 / 0.26));
+  background: rgb(var(--card) / 0.025);
+  -webkit-backdrop-filter: blur(5px) saturate(1.22);
+  backdrop-filter: blur(5px) saturate(1.22);
+  box-shadow: inset 0 1px 1px var(--dock-lens-glint), inset 0 -1px 2px var(--dock-lens-tint), 0 5px 14px var(--dock-shadow, rgb(0 0 0 / 0.26));
   pointer-events: none;
 }
 
@@ -166,20 +118,22 @@
   background:
     radial-gradient(ellipse 55% 19% at 50% 1%, var(--dock-lens-glint, rgb(236 245 255 / 0.6)), var(--dock-lens-tint, rgb(178 211 245 / 0.21)) 63%, transparent 81%),
     radial-gradient(ellipse 56% 21% at 50% 99%, var(--dock-lens-glint, rgb(239 248 255 / 0.65)), var(--dock-lens-tint, rgb(178 211 245 / 0.25)) 62%, transparent 83%),
-    linear-gradient(180deg, transparent, var(--dock-lens-core, rgb(0 0 0 / 0.72)) 23% 77%, transparent);
+    linear-gradient(180deg, transparent, rgb(var(--paper) / 0.025) 23% 77%, transparent);
   content: "";
   pointer-events: none;
 }
 
+:global(html[data-transparency="reduced"]) .dock,
 :global(html[data-transparency="reduced"]) .lens {
-  background: var(--dock-lens-solid, #161619);
+  background: rgb(var(--card));
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
 
 @media (prefers-reduced-transparency: reduce) {
+  .dock,
   .lens {
-    background: var(--dock-lens-solid, #161619);
+    background: rgb(var(--card));
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
@@ -225,7 +179,7 @@
 }
 
 .house { fill: currentColor; }
-.house path:first-child { stroke: var(--dock-edge, #0b0b0c); }
+.house path:first-child { stroke: rgb(var(--card)); }
 
 .helpIcon { position: relative; }
 
