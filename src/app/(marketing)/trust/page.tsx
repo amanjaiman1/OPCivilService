@@ -293,7 +293,7 @@ export default async function TrustPage() {
               <h3 className="font-semibold text-paper">Who processes data for DoOrDie</h3>
               <p className="mt-1.5">
                 Supabase (the database and sign-in), Vercel (hosting), Resend (email), your browser&apos;s push service if you turn
-                on notifications, and Google Analytics only if it&apos;s switched on and you agree. They may process data outside
+                on notifications, and Google tags for visit statistics only if you agree. They may process data outside
                 India. Details are in the{" "}
                 <Link href={policy("processors")} className="font-semibold text-accent hover:underline">
                   privacy policy
@@ -458,9 +458,9 @@ export default async function TrustPage() {
               <h3 className="mt-3 font-semibold text-paper">Your account, yourself</h3>
               <p className="mt-1.5">
                 Download your data or delete your account in Settings, any time. Locked out? Use{" "}
-                <Link href="/forgot-password" className="font-semibold text-accent hover:underline">
+                <a href="/forgot-password" className="font-semibold text-accent hover:underline">
                   Forgot password
-                </Link>
+                </a>
                 .
               </p>
             </li>

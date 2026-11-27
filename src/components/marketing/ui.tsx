@@ -51,15 +51,17 @@ export function ButtonLink({
   track?: string;
   className?: string;
 }) {
+  // Leave the public document before opening an account page.
+  const ButtonAnchor = href === "/signup" || href === "/dashboard" ? "a" : Link;
   return (
-    <Link
+    <ButtonAnchor
       href={href}
       data-track={track}
       className={cn(buttonBase, buttonVariants[variant], buttonSizes[size], className)}
     >
       {children}
       {arrow && <ArrowRight className="h-4 w-4" aria-hidden />}
-    </Link>
+    </ButtonAnchor>
   );
 }
 

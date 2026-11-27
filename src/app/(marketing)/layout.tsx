@@ -29,7 +29,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
       <main id="main">{children}</main>
       <SiteFooter />
       <JsonLd data={siteGraph()} />
-      <Analytics />
+      <Analytics includeTagManager />
       <SiteServiceWorker />
     </div>
   );
