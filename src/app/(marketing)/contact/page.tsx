@@ -46,9 +46,9 @@ export default async function ContactPage() {
             <FeatureCard icon={UserCog} title="Your account and data">
               You can download your data or delete your account yourself, any time, in Settings. If you can&apos;t sign
               in, use{" "}
-              <Link href="/forgot-password" className="font-semibold text-accent hover:underline">
+              <a href="/forgot-password" className="font-semibold text-accent hover:underline">
                 Forgot password
-              </Link>
+              </a>
               .
             </FeatureCard>
           </div>

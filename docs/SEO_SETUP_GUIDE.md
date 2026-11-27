@@ -44,7 +44,7 @@ production deployment → ⋯ → Redeploy).
 | --- | --- | --- | --- |
 | `NEXT_PUBLIC_SITE_URL` | Strongly recommended | `https://example.com` | The address used in canonical links, the sitemap, robots.txt and social previews. Use the main domain from step 1, with `https://` and no trailing slash. Without it, Vercel's production domain is used, which may not be the one you want. |
 | `NEXT_PUBLIC_CONTACT_EMAIL` | Recommended | `hello@example.com` | Shown on `/contact`, which the privacy policy and terms point to. It is the only way the site offers to reach you, so without it visitors have no contact route. The site names no person, so use an address that doesn't show your name, for example a separate one made for DoOrDie. |
-| `NEXT_PUBLIC_GA_MEASUREMENT_ID` | Optional | `G-XXXXXXXXXX` | Turns on Google Analytics, with a consent banner, on the public pages only. See step 6. |
+| `NEXT_PUBLIC_GA_MEASUREMENT_ID` | Optional | `G-XXXXXXXXXX` | Adds direct GA4 after consent on public pages and sign-in screens. See step 6. |
 | `NEXT_PUBLIC_BING_SITE_VERIFICATION` | Optional | `1A2B3C…` | Bing Webmaster Tools' verification code. See step 5. |
 
 Preview deployments are never indexed, whatever these are set to: they answer
@@ -113,7 +113,8 @@ Bing also supplies Yahoo's results.
 
 Analytics only loads for visitors who press **Allow analytics** in the banner,
 only on the public pages and sign-in screens, and never inside anyone's
-account. If you skip this step there is no banner and no tracking at all.
+account. The public site loads Tag Manager container `GTM-WMRWPLMS` after
+consent, including when the direct GA4 integration below is disabled.
 
 1. At [analytics.google.com](https://analytics.google.com): **Admin → Create →
    Property**. Time zone India, currency Indian rupee.

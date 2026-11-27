@@ -5,10 +5,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 /* ════════════════════════════════════════════════════════════════
-   GOOGLE ANALYTICS 4, OPT-IN, PUBLIC PAGES ONLY
-   Off unless NEXT_PUBLIC_GA_MEASUREMENT_ID is set at build time. Even then
-   nothing loads until the visitor agrees in the banner, and the choice is
-   remembered on this device.
+   GOOGLE TAGS, OPT-IN
+   The public site's layout enables Tag Manager. The optional direct GA4
+   integration also covers the sign-in screens. Both wait for the visitor
+   to agree in the banner, and the choice is remembered on this device.
 
    It is mounted by the public site's layout and the sign-in screens only.
    While it is unmounted (inside the app itself) Google's opt-out flag is
@@ -20,6 +20,7 @@ import { usePathname } from "next/navigation";
    ════════════════════════════════════════════════════════════════ */
 
 const GA_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim() || "";
+const GTM_ID = "GTM-WMRWPLMS";
 const CONSENT_KEY = "doordie-analytics-consent";
 
 type Choice = "granted" | "denied";
@@ -36,20 +37,33 @@ function setDisabled(disabled: boolean) {
   (window as unknown as Record<string, boolean>)[disableFlag] = disabled;
 }
 
-function loadGa() {
-  if (window.gtag) return;
-  window.dataLayer = window.dataLayer || [];
-  window.gtag = function gtag() {
-    // gtag.js expects the arguments object itself.
-    // eslint-disable-next-line prefer-rest-params
-    window.dataLayer!.push(arguments);
-  };
-  window.gtag("js", new Date());
-  window.gtag("config", GA_ID, { send_page_view: false });
+function appendGoogleScript(path: string, id: string) {
   const script = document.createElement("script");
+  script.id = id;
   script.async = true;
-  script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(GA_ID)}`;
+  script.src = `https://www.googletagmanager.com/${path}?id=${encodeURIComponent(id)}`;
   document.head.appendChild(script);
+}
+
+function loadGoogleTags(includeTagManager: boolean) {
+  const dataLayer = (window.dataLayer ??= []);
+  if (!window.gtag) {
+    window.gtag = function gtag() {
+      // gtag.js expects the arguments object itself.
+      // eslint-disable-next-line prefer-rest-params
+      dataLayer.push(arguments);
+    };
+    window.gtag("js", new Date());
+  }
+
+  if (includeTagManager && !document.getElementById(GTM_ID)) {
+    dataLayer.push({ "gtm.start": Date.now(), event: "gtm.js" });
+    appendGoogleScript("gtm.js", GTM_ID);
+  }
+  if (GA_ID && !document.getElementById(GA_ID)) {
+    window.gtag("config", GA_ID, { send_page_view: false });
+    appendGoogleScript("gtag/js", GA_ID);
+  }
 }
 
 /** Sends an event if analytics is on and allowed; otherwise does nothing. */
@@ -68,22 +82,24 @@ function readChoice(): Choice | null {
   }
 }
 
-export function Analytics() {
+export function Analytics({ includeTagManager = false }: { includeTagManager?: boolean }) {
   const pathname = usePathname();
+  const enabled = Boolean(GA_ID) || includeTagManager;
   // `undefined` until the stored choice has been read, so the banner never
   // flashes for someone who already answered.
   const [choice, setChoice] = useState<Choice | null | undefined>(undefined);
 
   useEffect(() => {
-    if (!GA_ID) return;
+    if (!enabled) return;
     setChoice(readChoice());
+    if (!GA_ID) return;
     setDisabled(false);
     return () => setDisabled(true);
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
-    if (choice === "granted") loadGa();
-  }, [choice]);
+    if (enabled && choice === "granted") loadGoogleTags(includeTagManager);
+  }, [choice, enabled, includeTagManager]);
 
   useEffect(() => {
     if (choice !== "granted") return;
@@ -106,7 +122,7 @@ export function Analytics() {
     return () => document.removeEventListener("click", onClick);
   }, [choice]);
 
-  if (!GA_ID || choice !== null) return null;
+  if (!enabled || choice !== null) return null;
 
   const choose = (c: Choice) => {
     try {
@@ -125,8 +141,7 @@ export function Analytics() {
     >
       <p className="text-sm font-semibold text-paper">Can we count your visit?</p>
       <p className="mt-1 text-xs leading-relaxed text-paper/65">
-        With your permission we use Google Analytics, which sets cookies, to see which pages help aspirants. It runs on
-        these public pages only, never inside your account.{" "}
+        With your permission, we use Google tags to see which pages people visit. These tags may set cookies.{" "}
         <Link href="/privacy-policy" className="font-semibold text-accent hover:underline">
           Privacy policy
         </Link>
@@ -151,11 +166,10 @@ export function Analytics() {
 
 /**
  * Lets a visitor change their mind: forgets the stored choice, so the banner
- * asks again. Shown on the privacy policy. Renders nothing when analytics is off.
+ * asks again. Shown on the public privacy policy.
  */
 export function AnalyticsChoiceReset() {
   const [cleared, setCleared] = useState(false);
-  if (!GA_ID) return null;
   return (
     <button
       onClick={() => {

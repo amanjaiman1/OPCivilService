@@ -156,10 +156,9 @@ export default function PrivacyPolicyPage() {
             </p>
             <h3>Analytics, only with your consent</h3>
             <p>
-              If analytics is switched on for this site, a banner asks before anything is collected. If you agree, Google
-              Analytics records which public pages you visit, which buttons you click, and whether you completed sign-up.
-              It uses cookies. It does not run inside your account, and it never receives your preparation data. If you
-              decline, nothing is sent.
+              A banner asks before Google Tag Manager loads on the public website. It loads tags for visit statistics.
+              If Google Analytics is enabled, it also measures public page visits, button clicks and completed sign-ups.
+              These services may use cookies. They run outside your account and receive no preparation data.
             </p>
             <div className="not-prose my-4">
               <AnalyticsChoiceReset />
@@ -196,8 +195,7 @@ export default function PrivacyPolicyPage() {
                 delivering notifications, if you turn them on.
               </li>
               <li>
-                <strong>Google Analytics:</strong> visit statistics for the public pages, only if analytics is switched on
-                and you agree.
+                <strong>Google Tag Manager and Google Analytics:</strong> visit statistics for the public pages, with your consent.
               </li>
             </ul>
             <p>These providers may store or process data outside India.</p>

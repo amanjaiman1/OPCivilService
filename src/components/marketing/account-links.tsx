@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
 /** Where Supabase keeps the session (lib/supabase.ts → AUTH_STORAGE_KEY). */
@@ -32,25 +31,26 @@ export function AccountLinks({ compact = false }: { compact?: boolean }) {
 
   // Plain strings, not cn(): this runs in the browser on every public page, and
   // tailwind-merge would add its weight to all of them.
+  // Account links open a new document so public tags end with this page.
   if (signedIn) {
     return (
-      <Link href="/dashboard" className={compact ? `${primary} w-full` : primary}>
+      <a href="/dashboard" className={compact ? `${primary} w-full` : primary}>
         Open dashboard <ArrowRight className="h-4 w-4" aria-hidden />
-      </Link>
+      </a>
     );
   }
 
   return (
     <div className={compact ? "flex w-full flex-col items-stretch gap-2" : "flex items-center gap-2"}>
-      <Link
+      <a
         href="/login"
         className="lg-clear inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-semibold tracking-snugg text-paper/80 transition-all hover:text-paper"
       >
         Sign in
-      </Link>
-      <Link href="/signup" data-track="cta_header" className={primary}>
+      </a>
+      <a href="/signup" data-track="cta_header" className={primary}>
         Start free
-      </Link>
+      </a>
     </div>
   );
 }
