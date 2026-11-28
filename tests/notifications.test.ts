@@ -59,6 +59,8 @@ function data(over: Partial<ChronicleData> = {}): ChronicleData {
     files: [],
     plans: [],
     coach: { decisions: [], briefings: [] },
+    // This fixture never opens a walkthrough; the slice still has to be whole.
+    walkthroughs: {},
     ...over,
   };
 }

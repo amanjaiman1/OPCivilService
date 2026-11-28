@@ -8,6 +8,8 @@
 export type ISODate = string; // "yyyy-mm-dd"
 export type Theme = "dark" | "light";
 
+import type { WalkthroughProgressMap } from "./walkthroughs/progress";
+
 /**
  * The appearance theme the user picked. Lavender is the default. Synced
  * with the account. Values older versions saved ("blue", "system") are read
@@ -966,6 +968,12 @@ export interface ChronicleData {
   plans: RoadmapPlan[];
   /** What the Study Coach suggested and what you did with it. See `CoachLog`. */
   coach: CoachLog;
+  /**
+   * Where this account is in each interactive walkthrough, keyed by surface.
+   * Part of the synced snapshot, so a walkthrough finished on the phone stays
+   * finished on the laptop. See `lib/walkthroughs/progress`.
+   */
+  walkthroughs: WalkthroughProgressMap;
 }
 
 /* ── Study Coach history ─────────────────────────────────────── */

@@ -13,24 +13,23 @@ import { cn } from "@/lib/utils";
 export function StartDemo({ className, label = "Start the demo" }: { className?: string; label?: string }) {
   const [starting, setStarting] = useState(false);
   return (
-    <button
-      type="button"
-      data-track="demo_start"
-      disabled={starting}
-      onClick={() => {
-        setStarting(true);
-        enterDemo();
-        window.location.assign("/dashboard");
-      }}
-      className={cn(
-        "inline-flex h-12 items-center justify-center gap-2 rounded-full bg-accent px-6 text-[0.95rem] font-semibold tracking-snugg text-accent-fg shadow-accent transition-all duration-200 ease-out hover:-translate-y-px hover:brightness-[1.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/45 focus-visible:ring-offset-2 focus-visible:ring-offset-ink disabled:opacity-70",
-        className,
-      )}
-    >
-      <PlayCircle className="h-5 w-5" aria-hidden />
-      {starting ? "Opening…" : label}
-      {!starting && <ArrowRight className="h-4 w-4" aria-hidden />}
-    </button>
+    <form action="/dashboard" method="get" onSubmit={() => enterDemo()}>
+      <input type="hidden" name="demo" value="1" />
+      <button
+        type="submit"
+        data-track="demo_start"
+        disabled={starting}
+        onClick={() => setStarting(true)}
+        className={cn(
+          "inline-flex h-12 items-center justify-center gap-2 rounded-full bg-accent px-6 text-[0.95rem] font-semibold tracking-snugg text-accent-fg shadow-accent transition-all duration-200 ease-out hover:-translate-y-px hover:brightness-[1.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/45 focus-visible:ring-offset-2 focus-visible:ring-offset-ink disabled:opacity-70",
+          className,
+        )}
+      >
+        <PlayCircle className="h-5 w-5" aria-hidden />
+        {starting ? "Opening…" : label}
+        {!starting && <ArrowRight className="h-4 w-4" aria-hidden />}
+      </button>
+    </form>
   );
 }
 

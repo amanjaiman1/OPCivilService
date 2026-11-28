@@ -12,7 +12,7 @@ import { blankChronicleState, useChronicle } from "@/lib/store";
 import { setActiveAccount } from "@/lib/account/scope";
 import { deactivateAccount } from "@/lib/account/session";
 import { exitDemo, loadSampleAccount } from "@/lib/demo/load";
-import { markDemoMounted } from "@/lib/demo/mode";
+import { markDemoMounted, adoptDemoFromUrl } from "@/lib/demo/mode";
 import { IDLE, StaticAccountProvider, type AccountContextValue, type SyncStatusValue } from "@/components/account/account-session";
 import { BootScreen } from "@/components/account/boot-screen";
 
@@ -24,6 +24,7 @@ export function DemoSession({ exitTo, children }: { exitTo: string; children: Re
 
   useEffect(() => {
     let live = true;
+    adoptDemoFromUrl();
     markDemoMounted(true);
     // Nothing of any account in memory while the sample downloads.
     setActiveAccount(null);

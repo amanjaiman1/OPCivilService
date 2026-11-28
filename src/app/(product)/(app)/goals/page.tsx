@@ -252,7 +252,7 @@ export default function GoalsPage() {
         title="Ambition, broken into the achievable."
         description="Name the number and what feeds it. Hours come from the journal, mastery from the syllabus, passes from the revision queue, so progress updates itself from what you've actually done."
         actions={
-          <Button onClick={() => openAdd(category === "all" ? undefined : category)}>
+          <Button data-goals-add onClick={() => openAdd(category === "all" ? undefined : category)}>
             <Plus className="h-4 w-4" /> New goal
           </Button>
         }
@@ -412,7 +412,7 @@ export default function GoalsPage() {
               }
             />
           ) : (
-            <div className="space-y-7">
+            <div className="space-y-7" data-goals-list>
               {groups.map(({ category: label, records }) => {
                 const active = records.filter(({ goal }) => goal.status === "Active");
                 const completed = records.filter(({ goal }) => goal.status === "Completed");

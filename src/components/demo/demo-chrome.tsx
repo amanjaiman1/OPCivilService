@@ -12,6 +12,7 @@ import { DEMO_STEPS } from "@/lib/demo/guide";
 import { leaveDemo, readDemoStep, saveDemoStep } from "@/lib/demo/mode";
 import { useChronicle } from "@/lib/store";
 import { useAccount } from "@/components/account/account-session";
+import { useWalkthroughOptional } from "@/components/walkthrough/walkthrough-context";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -81,7 +82,7 @@ export function DemoBar() {
     <div
       role="region"
       aria-label="Demo"
-      className="sticky top-0 z-20 -mx-1 mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-accent/30 bg-card/95 px-3 py-2.5 shadow-soft backdrop-blur sm:px-4"
+      className="relative z-20 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-accent/30 bg-card/95 px-3 py-2.5 shadow-soft backdrop-blur sm:px-4"
     >
       <span className="inline-flex items-center gap-1.5 rounded-full bg-accent px-2.5 py-1 text-[0.68rem] font-bold uppercase tracking-[0.12em] text-accent-fg">
         <FlaskConical className="h-3.5 w-3.5" aria-hidden /> Demo
@@ -120,12 +121,14 @@ export function DemoGuideSpace() {
 export function DemoGuide() {
   const pathname = usePathname();
   const { step, guideOpen, setGuideOpen, goTo, signUp, exit } = useDemoChrome();
+  const walkthrough = useWalkthroughOptional();
+  const hidden = !guideOpen || Boolean(walkthrough?.isOpen);
   const ref = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const el = ref.current;
     const root = document.documentElement;
-    if (!guideOpen || !el) {
+    if (hidden || !el) {
       root.style.removeProperty(GUIDE_SPACE);
       return;
     }
@@ -137,9 +140,9 @@ export function DemoGuide() {
       ro.disconnect();
       root.style.removeProperty(GUIDE_SPACE);
     };
-  }, [guideOpen, step]);
+  }, [hidden, step]);
 
-  if (!guideOpen) return null;
+  if (hidden) return null;
   const s = DEMO_STEPS[step];
   const last = step === DEMO_STEPS.length - 1;
   const here = pathname === s.path;
@@ -159,7 +162,7 @@ export function DemoGuide() {
           type="button"
           onClick={() => setGuideOpen(false)}
           className="grid h-8 w-8 place-items-center rounded-full text-paper/55 transition-colors hover:bg-paper/[0.06] hover:text-paper"
-          aria-label="Hide the guide"
+          aria-label="Close the walkthrough"
         >
           <X className="h-4 w-4" aria-hidden />
         </button>

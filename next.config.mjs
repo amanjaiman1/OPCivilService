@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  allowedDevOrigins: ["*.vercel.run"],
   images: {
     // Use the patched image stack and keep WebP as the only generated format.
     formats: ["image/webp"],

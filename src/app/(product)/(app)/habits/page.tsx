@@ -201,7 +201,7 @@ export default function HabitsPage() {
           </div>
 
           {/* ── Every habit ─────────────────────────────────── */}
-          <section aria-labelledby="your-habits" className="space-y-3">
+          <section aria-labelledby="your-habits" data-habits-list className="space-y-3">
             <div className="flex items-end justify-between gap-3">
               <div>
                 <h2 id="your-habits" className="text-[1.02rem] font-semibold tracking-[-0.02em] text-paper">

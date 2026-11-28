@@ -276,7 +276,7 @@ export default function RevisionPage() {
         title="The exam is won in revision."
         description="Spaced repetition turns fragile memory into permanent recall. Tick items off here, or straight from the day's journal entry — either way the next pass reschedules itself."
         actions={
-          <Button onClick={openAdd}>
+          <Button data-revision-add onClick={openAdd}>
             <Plus className="h-4 w-4" /> Add item
           </Button>
         }
@@ -372,7 +372,7 @@ export default function RevisionPage() {
               />
             </Card>
 
-            <Card className="p-5 sm:p-6">
+            <Card className="p-5 sm:p-6" data-revision-confidence>
               <p className="eyebrow mb-1">How well it&rsquo;s sticking</p>
               <h2 className="mb-4 text-base font-semibold text-paper">
                 Confidence spread
@@ -456,7 +456,7 @@ export default function RevisionPage() {
               description="Try a different subject, or clear the search."
             />
           ) : (
-            <div className="space-y-8">
+            <div className="space-y-8" data-revision-buckets>
               {overdue.length > 0 && (
                 <section>
                   <div className="mb-3 flex items-center gap-2">

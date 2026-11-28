@@ -709,7 +709,7 @@ export default function SubjectsPage() {
 
       {/* Overall */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="flex items-center gap-4 p-5">
+        <Card className="flex items-center gap-4 p-5" data-subjects-confidence>
           <RadialProgress
             value={stats.mastery}
             size={68}
@@ -965,7 +965,7 @@ export default function SubjectsPage() {
           description="Try another paper, or clear the search."
         />
       ) : (
-        <div className="space-y-8">
+        <div className="space-y-8" data-subjects-tree>
           {groups.map((p) => {
             const subs = visible.filter((s) => s.paper === p);
             return (

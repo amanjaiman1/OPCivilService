@@ -18,6 +18,7 @@ import {
 } from "./theme";
 import { checkSleep, hoursFromTimes, isClock, MAX_SLEEP_HOURS, nightOf } from "./sleep";
 import { pruneFiles } from "./files";
+import { sanitizeWalkthroughProgress, type WalkthroughProgressMap } from "./walkthroughs/progress";
 import {
   type ChildPolicy,
   type WeeklyTargetIntent,
@@ -355,6 +356,13 @@ interface ChronicleState extends ChronicleData {
   /** Keeps today's briefing headlines, once a day. */
   recordCoachBriefing: (b: Omit<CoachBriefingRecord, "id">) => void;
 
+  /* interactive walkthroughs
+     The player owns the rules (lib/walkthroughs/progress); the store keeps
+     the synced copy, so a walkthrough finished on one device stays finished
+     on the next one. */
+  /** Replaces the walkthrough progress map with an already-validated one. */
+  saveWalkthroughProgress: (next: WalkthroughProgressMap) => void;
+
   /* roadmap
      Plans are this person's own; nothing here creates one for them. A plan
      links to goals and journal days by reference and never edits them. */
@@ -504,6 +512,9 @@ export const SNAPSHOT_KEYS = [
   "plans",
   // What the Study Coach suggested and what you did with it.
   "coach",
+  // Which interactive walkthroughs this account has seen, and where it
+  // stopped — so a finished walkthrough stays finished on every device.
+  "walkthroughs",
   "themeMode",
   "reduceTransparency",
   // Remembering that today's sleep prompt was answered must follow the user
@@ -531,7 +542,7 @@ export interface SyncStamp {
  * has written the account, so an old cached app can't overwrite newer data.
  * Bump it whenever the shape of synced data changes.
  */
-export const STORE_VERSION = 19;
+export const STORE_VERSION = 20;
 
 let hydrationFailed = false;
 /** Whether the last rehydration from storage failed (unreadable or a migration threw). */
@@ -1634,6 +1645,10 @@ export const useChronicle = create<ChronicleState>()(
           return { coach: { decisions: s.coach?.decisions ?? [], briefings: briefings.slice(-COACH_BRIEFINGS_KEPT) } };
         }),
 
+      /* ── interactive walkthroughs ─────────────────────────────── */
+
+      saveWalkthroughProgress: (next) => set({ walkthroughs: next }),
+
       /* ── roadmap ──────────────────────────────────────────────── */
 
       savePlan: (plan) => {
@@ -2094,6 +2109,12 @@ export const useChronicle = create<ChronicleState>()(
 
         // v17 -> v18: weekly objectives become actionable Roadmap items.
         if (version < 18 && state.plans !== undefined) state.plans = normalizePlans(state.plans);
+
+        // v19 -> v20: interactive walkthroughs remember where each account
+        // stopped. A snapshot written before the feature has no slice at all;
+        // one written by a broken build may hold anything, so both pass through
+        // the same validation the cloud normaliser uses.
+        if (version < 20) state.walkthroughs = sanitizeWalkthroughProgress(state.walkthroughs);
 
         // v19 adds a write compatibility floor for Phase 03 sleep fields. Existing data is kept.
         return state as ChronicleState;

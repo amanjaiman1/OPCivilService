@@ -281,10 +281,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {/* The page: the search bar, then the stage. */}
             <div className="flex min-w-0 flex-1 flex-col gap-3 lg:py-3 lg:pl-3 lg:pr-3">
               <Topbar desktop={desktop} onOpenDrawer={() => setDrawerOpen(true)} onOpenPalette={openPalette} />
+              {demo && <DemoBar />}
               <main className="app-stage no-scrollbar relative min-h-0 flex-1 overflow-y-auto">
                 {/* Bottom padding clears the phone's dock. */}
                 <div className="mx-auto w-full max-w-[1480px] px-4 pb-[calc(var(--bottom-nav-h,0px)+1.5rem)] pt-3 sm:px-6 lg:px-8 lg:pb-[max(2.5rem,calc(var(--bottom-nav-h,0px)+1.5rem))] lg:pt-8 2xl:px-10">
-                  {demo && <DemoBar />}
                   <TeamBanner />
                   <PageTransition>
                     <FeatureGate>{children}</FeatureGate>

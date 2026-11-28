@@ -8,8 +8,8 @@ import { useAccount, useSyncStatus } from "@/components/account/account-session"
 import { beginRouteTransition } from "@/components/layout/route-transition";
 import { shouldAutoOpenTour } from "@/lib/tour";
 import { toISODate } from "@/lib/utils";
-import type { EntryGuide } from "@/lib/entry-guides";
 import { hasOpenOverlay } from "@/components/ui/modal";
+import { WalkthroughProvider } from "@/components/walkthrough/walkthrough-provider";
 import { TourContext, type TourContextValue } from "./tour-context";
 
 /* ════════════════════════════════════════════════════════════════
@@ -24,7 +24,6 @@ import { TourContext, type TourContextValue } from "./tour-context";
 
 const loadTour = () => import("./feature-tour");
 const FeatureTour = lazy(loadTour);
-const EntryGuideDialog = lazy(() => import("./entry-guide"));
 
 /** How long the dashboard is on screen before the tour rises over it. */
 const AUTO_OPEN_DELAY_MS = 900;
@@ -42,7 +41,6 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
   const updateProfile = useChronicle((s) => s.updateProfile);
 
   const [isOpen, setOpen] = useState(false);
-  const [entryGuide, setEntryGuide] = useState<{ guide: EntryGuide; inCapture: boolean; pathname: string } | null>(null);
   const [hint, setHint] = useState(false);
   const openedOn = useRef<string | null>(null);
   const autoOpened = useRef(false);
@@ -62,7 +60,6 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
     hydrated &&
     synced &&
     !isOpen &&
-    !entryGuide &&
     !autoOpened.current &&
     pathname === "/dashboard" &&
     shouldAutoOpenTour({ onboardedAt, tourSeenAt });
@@ -85,10 +82,6 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
     setHint(false);
     openedOn.current = pathname;
     setOpen(true);
-  }, [pathname]);
-
-  const openGuide = useCallback((guide: EntryGuide, inCapture = false) => {
-    setEntryGuide({ guide, inCapture, pathname });
   }, [pathname]);
 
   const prepare = useCallback(() => {
@@ -120,8 +113,7 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
   // Another page while it is open (the back button, say): it goes with it.
   useEffect(() => {
     if (isOpen && openedOn.current && pathname !== openedOn.current) close();
-    if (entryGuide && entryGuide.pathname !== pathname) setEntryGuide(null);
-  }, [isOpen, pathname, close, entryGuide]);
+  }, [isOpen, pathname, close]);
 
   useEffect(() => {
     if (!hint) return;
@@ -132,26 +124,22 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
   const dismissHint = useCallback(() => setHint(false), []);
 
   const value = useMemo<TourContextValue>(
-    () => ({ open, prepare, openGuide, isOpen: isOpen || entryGuide !== null, fresh: hydrated && !tourSeenAt, hint, dismissHint }),
-    [open, prepare, openGuide, entryGuide, isOpen, hydrated, tourSeenAt, hint, dismissHint],
+    () => ({ open, prepare, isOpen, fresh: hydrated && !tourSeenAt, hint, dismissHint }),
+    [open, prepare, isOpen, hydrated, tourSeenAt, hint, dismissHint],
   );
 
   return (
     <TourContext.Provider value={value}>
-      {children}
-      {entryGuide?.pathname === pathname && (
-        <Suspense fallback={<span className="sr-only" role="status">Opening entry guide</span>}>
-          <EntryGuideDialog guide={entryGuide.guide} onClose={() => setEntryGuide(null)}
-            onTour={entryGuide.inCapture ? undefined : () => { setEntryGuide(null); open(); }} />
-        </Suspense>
-      )}
-      <AnimatePresence>
-        {isOpen && (
-          <Suspense key="tour" fallback={null}>
-            <FeatureTour onClose={close} />
-          </Suspense>
-        )}
-      </AnimatePresence>
+      <WalkthroughProvider>
+        {children}
+        <AnimatePresence>
+          {isOpen && (
+            <Suspense key="tour" fallback={null}>
+              <FeatureTour onClose={close} />
+            </Suspense>
+          )}
+        </AnimatePresence>
+      </WalkthroughProvider>
     </TourContext.Provider>
   );
 }

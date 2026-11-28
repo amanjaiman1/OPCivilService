@@ -3,6 +3,7 @@ import { toISODate } from "../utils";
 import { isThemeMode, legacyThemeMode, themeModeFromSurface } from "../theme";
 import { upgradeEntryTopics } from "../topics";
 import { normalizePlans } from "../roadmap";
+import { sanitizeWalkthroughProgress } from "../walkthroughs/progress";
 
 /**
  * Brings a profile saved by an older version up to the current shape.
@@ -171,6 +172,7 @@ type SnapshotLike = {
   subjects?: Subject[];
   plans?: unknown;
   coach?: unknown;
+  walkthroughs?: unknown;
 };
 
 /**
@@ -220,6 +222,14 @@ export function normalizeSnapshot<T extends SnapshotLike>(snapshot: T): T {
     if (!c || typeof c !== "object" || !Array.isArray(c.decisions) || !Array.isArray(c.briefings)) {
       next = { ...next, coach: { decisions: [], briefings: [] } };
     }
+  }
+  // Walkthrough progress from another device: ids and steps are validated by
+  // the pure rules in lib/walkthroughs/progress, and anything unreadable is
+  // dropped so the first-visit controller starts that surface fresh.
+  if (next.walkthroughs !== undefined) {
+    const clean = sanitizeWalkthroughProgress(next.walkthroughs);
+    const same = JSON.stringify(clean) === JSON.stringify(next.walkthroughs);
+    if (!same) next = { ...next, walkthroughs: clean };
   }
   return next;
 }

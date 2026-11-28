@@ -32,16 +32,19 @@ function Section({
   title,
   aside,
   hint,
+  spot,
   children,
 }: {
   className?: string;
+  spot?: "study" | "feelings" | "reflection";
   title: string;
   aside?: React.ReactNode;
   hint?: string;
   children: React.ReactNode;
 }) {
+  const anchor = spot ? { [`data-journal-${spot}`]: "" } : {};
   return (
-    <section className={cn("space-y-2.5", className)}>
+    <section {...anchor} className={cn("space-y-2.5", className)}>
       <div className="flex items-baseline justify-between gap-3">
         <h3 className="text-[0.78rem] font-semibold tracking-snugg text-paper/80">{title}</h3>
         {aside && <span className="text-xs text-paper/55">{aside}</span>}
@@ -576,7 +579,7 @@ export function JournalFields({
   );
 
   const study = (
-    <Section className={outline("study", true)} title="Study" aside={`${formatHours(totalDraftHours)} total`} hint={page ? "Hours by subject. Empty rows are left out." : undefined}>
+    <Section spot="study" className={outline("study", true)} title="Study" aside={`${formatHours(totalDraftHours)} total`} hint={page ? "Hours by subject. Empty rows are left out." : undefined}>
       <div className="space-y-2">
         {draft.blocks.map((b, i) => (
           <div key={i} className="flex items-center gap-2">
@@ -671,13 +674,13 @@ export function JournalFields({
   );
 
   const feel = (
-    <Section className={outline("feelings", true)} title="How the day felt">
+    <Section spot="feelings" className={outline("feelings", true)} title="How the day felt">
       <FeelingSliders values={draft} onChange={patch} />
     </Section>
   );
 
   const notes = (
-    <Section className={outline("notes", true)} title={page ? "Write about your day" : "Notes"} hint={page ? "One line that sums it up, then as much as you like." : undefined}>
+    <Section spot="reflection" className={outline("notes", true)} title={page ? "Write about your day" : "Notes"} hint={page ? "One line that sums it up, then as much as you like." : undefined}>
       <Input
         value={draft.highlights ?? ""}
         onChange={(e) => patch({ highlights: e.target.value })}

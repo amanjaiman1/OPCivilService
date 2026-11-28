@@ -206,6 +206,9 @@ export function decideForUser(
     // then those habits are skipped rather than guessed (`roadmapKnown`).
     plans: Array.isArray(snapshot.plans) ? snapshot.plans.map((p) => withWallClockCompletions(p, tz)) : [],
     coach: { decisions: [], briefings: [] },
+    // Walkthrough progress plays no part in dispatch; the slice exists so this
+    // partial snapshot is still a whole ChronicleData.
+    walkthroughs: {},
   };
   if (!data.profile) return { send: false, reason: "Snapshot has no profile." };
 

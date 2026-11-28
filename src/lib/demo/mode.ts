@@ -34,7 +34,34 @@ function session(): Storage | null {
 
 /** Whether this tab is in the demo. */
 export function isDemo(): boolean {
-  return mounted || session()?.getItem(KEY) === "1";
+  return mounted || session()?.getItem(KEY) === "1" || demoInUrl();
+}
+
+/** `/dashboard?demo=1` opens the demo before any script has run. */
+function demoInUrl(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return new URLSearchParams(window.location.search).get("demo") === "1";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Keeps the demo on after the link that opened it, so a reload or a page
+ * change stays in it, then takes the parameter out of the address bar.
+ */
+export function adoptDemoFromUrl(): void {
+  if (!demoInUrl()) return;
+  session()?.setItem(KEY, "1");
+  session()?.removeItem(STEP_KEY);
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("demo");
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+  } catch {
+    // The flag is stored; the address bar can keep the parameter.
+  }
 }
 
 export function enterDemo(): void {

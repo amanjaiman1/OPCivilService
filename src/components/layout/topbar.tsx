@@ -1,9 +1,6 @@
 "use client";
 
 import { AppLink as Link } from "./app-link";
-import { usePathname } from "next/navigation";
-import { entryGuideForPath } from "@/lib/entry-guides";
-import { EntryGuideButton } from "@/components/tour/entry-guide-button";
 import { warmOverlays } from "./overlays";
 import { CalendarClock, Command, Menu, Search } from "lucide-react";
 import { Logo } from "./logo";
@@ -11,7 +8,7 @@ import { AccountMenu } from "@/components/account/account-menu";
 import { useAccount } from "@/components/account/account-session";
 import { NotificationCentre } from "@/components/notifications/centre";
 import { Notifier } from "@/components/notifications/notifier";
-import { TourButton } from "@/components/tour/tour-button";
+import { TourLauncher } from "@/components/walkthrough/tour-launcher";
 import { IconButton } from "@/components/ui/button";
 import { useChronicle } from "@/lib/store";
 import { useMounted } from "@/lib/hooks";
@@ -22,8 +19,8 @@ import { daysBetween, toISODate } from "@/lib/utils";
  * field that opens the command palette (⌘K / Ctrl+K), then the exam countdown
  * and the one loud action, logging today. The account and notifications live
  * on the rail there. On a phone the bar carries the menu, account and
- * notifications. The feature tour's button is here on every page: a
- * labelled pill on a desktop, a compass on a phone.
+ * notifications. One Tour button sits here on every page — a labelled pill on
+ * a desktop, a compass on a phone — and it explains the page you are on.
  */
 export function Topbar({
   onOpenDrawer,
@@ -35,7 +32,6 @@ export function Topbar({
   /** The rail is showing, with the account and notifications on it. */
   desktop: boolean;
 }) {
-  const guide = entryGuideForPath(usePathname());
   const profile = useChronicle((s) => s.profile);
   const { mode, user } = useAccount();
   const mounted = useMounted();
@@ -92,15 +88,14 @@ export function Topbar({
           </div>
         )}
 
-        {desktop && <TourButton variant="pill" />}
-        {guide && <EntryGuideButton guide={guide} />}
+        {desktop && <TourLauncher variant="pill" />}
 
         {!desktop && (
           <>
             <IconButton label="Search" onClick={onOpenPalette} onTouchStart={() => warmOverlays("palette")}>
               <Search className="h-5 w-5" />
             </IconButton>
-            {!guide && <TourButton variant="icon" />}
+            <TourLauncher variant="icon" />
             <NotificationCentre />
             <AccountMenu />
           </>

@@ -151,6 +151,8 @@ function useStudyRecord(): CoachData {
       files,
       plans,
       coach,
+      // The coach reads today's data; walkthrough progress is not part of it.
+      walkthroughs: {},
     }),
     [profile, accomplished, subjects, journal, mocks, revisions, currentAffairs, mistakes, habits, sleep, exercise, lifeLog, goals, books, milestones, reviews, topicLinks, selection, files, plans, coach],
   );

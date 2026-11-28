@@ -12,6 +12,7 @@ import {
   ChevronRight,
   CircleCheck,
   CloudOff,
+  Compass,
   Loader2,
   NotebookPen,
   RotateCcw,
@@ -56,8 +57,9 @@ import {
   useJournalEditor,
 } from "@/components/journal/journal-editor";
 import { LifeFields, TrackedFieldsDialog, useLifeEditor } from "@/components/life/life-form";
-import { EntryGuideButton } from "@/components/tour/entry-guide-button";
-import { captureGuide } from "@/lib/entry-guides";
+import { useWalkthroughOptional } from "@/components/walkthrough/walkthrough-context";
+import { walkthroughMeta } from "@/lib/walkthroughs/catalog";
+import { walkthroughState } from "@/lib/walkthroughs/progress";
 import { GoalsTab } from "./goals-tab";
 import { HabitTab } from "./habit-tab";
 import { draftDates, readDraft, writeDraft } from "./draft-store";
@@ -143,6 +145,24 @@ export function CaptureWorkspace({
   const savingRef = useRef(false);
   const dateRef = useRef(date);
   dateRef.current = date;
+  const walkthrough = useWalkthroughOptional();
+  /** The walkthrough is offered once per popup, and only on a first visit. */
+  const walkthroughOffered = useRef(false);
+
+  // The first time this account opens Daily Capture, the walkthrough explains
+  // the popup over it — after the day has loaded, never on top of a loading or
+  // error state. It writes walkthrough progress only; the day is untouched.
+  useEffect(() => {
+    if (loaded !== date || walkthroughOffered.current || !walkthrough) return;
+    const meta = walkthroughMeta("capture");
+    if (!meta) return;
+    const record = useChronicle.getState().walkthroughs?.[meta.id];
+    const state = walkthroughState(record, { id: meta.id, version: meta.version, stepCount: meta.steps });
+    if (state !== "new" && state !== "outdated") return;
+    walkthroughOffered.current = true;
+    const timer = window.setTimeout(() => walkthrough.openCapture(), 750);
+    return () => window.clearTimeout(timer);
+  }, [loaded, date, walkthrough]);
 
   const journal = useChronicle((s) => s.journal);
   const lifeLog = useChronicle((s) => s.lifeLog);
@@ -665,7 +685,9 @@ export function CaptureWorkspace({
       <Button variant="ghost" onClick={() => void requestClose()} disabled={saving}>
         Close
       </Button>
-      <SaveAllButton saving={saving} disabled={!anyDirty && !waitingForStorage} onClick={() => void saveAll()} />
+      <span data-capture-save className="contents">
+        <SaveAllButton saving={saving} disabled={!anyDirty && !waitingForStorage} onClick={() => void saveAll()} />
+      </span>
     </>
   );
 
@@ -686,7 +708,16 @@ export function CaptureWorkspace({
             <WeekStrip date={date} today={today} logged={loggedDays} waiting={waitingDays} onPick={changeDate} />
             <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-1.5">
               <SaveStatus saving={saving} anyDirty={anyDirty} outcome={outcome} failures={failures} mode={mode} sync={sync} onRetry={() => (anyDirty || waitingForStorage ? void saveAll() : syncNow())} />
-              <EntryGuideButton guide={captureGuide} inCapture />
+              {walkthrough && (
+                <button
+                  type="button"
+                  onClick={() => walkthrough.openCapture()}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[0.72rem] font-medium text-paper/55 transition hover:bg-paper/10 hover:text-paper"
+                >
+                  <Compass className="h-3.5 w-3.5" aria-hidden />
+                  How this works
+                </button>
+              )}
             </div>
           </div>
 
@@ -977,6 +1008,7 @@ function CaptureTabs({
             type="button"
             role="tab"
             id={`capture-tab-${s.id}`}
+            data-capture-tab={s.id}
             aria-selected={active}
             aria-controls={`capture-panel-${s.id}`}
             aria-keyshortcuts={String(i + 1)}

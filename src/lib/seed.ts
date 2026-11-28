@@ -424,6 +424,8 @@ export function createAccountTemplate(setup: AccountSetup, today = new Date()): 
     // The Roadmap starts empty: no plan is written for anyone.
     plans: [],
     coach: { decisions: [], briefings: [] },
+    // No walkthrough has been offered yet on a fresh account.
+    walkthroughs: {},
   };
 }
 

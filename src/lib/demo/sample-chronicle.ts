@@ -531,6 +531,8 @@ export function buildSampleChronicle(now: Date = new Date()): SampleChronicle {
     files: [],
     plans,
     coach: { decisions: [], briefings: [] },
+    // The demo account has not been shown any walkthrough, like a new one.
+    walkthroughs: {},
     // The default theme, so the demo and the screenshots show what a new account sees.
     themeMode: "lavender",
     // Today's sleep question already answered, so nothing stands in front of the pages.
