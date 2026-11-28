@@ -174,6 +174,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <TourProvider>
           <CaptureProvider key={accountId ?? mode}>
           <div className="app-root relative flex h-[100dvh] overflow-hidden">
+            {/* The rail, the sidebar and the top bar come before the page in
+                the tab order; this jumps straight to it. */}
+            <a
+              href="#main"
+              className="sr-only z-50 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-accent-fg focus:not-sr-only focus:fixed focus:left-4 focus:top-4"
+            >
+              Skip to content
+            </a>
+
             {/* The page-to-page wait. Driven from the tap rather than from the
                 router; see `route-transition.tsx`. In Suspense because it reads
                 the search params. */}
@@ -281,7 +290,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {/* The page: the search bar, then the stage. */}
             <div className="flex min-w-0 flex-1 flex-col gap-3 lg:py-3 lg:pl-3 lg:pr-3">
               <Topbar desktop={desktop} onOpenDrawer={() => setDrawerOpen(true)} onOpenPalette={openPalette} />
-              <main className="app-stage no-scrollbar relative min-h-0 flex-1 overflow-y-auto">
+              <main id="main" tabIndex={-1} className="app-stage no-scrollbar relative min-h-0 flex-1 overflow-y-auto outline-none">
                 {/* Bottom padding clears the phone's dock. */}
                 <div className="mx-auto w-full max-w-[1480px] px-4 pb-[calc(var(--bottom-nav-h,0px)+1.5rem)] pt-3 sm:px-6 lg:px-8 lg:pb-[max(2.5rem,calc(var(--bottom-nav-h,0px)+1.5rem))] lg:pt-8 2xl:px-10">
                   {demo && <DemoBar />}
