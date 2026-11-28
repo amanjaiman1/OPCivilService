@@ -13,23 +13,77 @@
 
 import { spawn, execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { existsSync, globSync } from "node:fs";
+import { createServer } from "node:net";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { chromium } from "playwright";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const APP = "http://localhost:3100";
-const MOCK = "http://localhost:54321";
+
+// The shell can pin PLAYWRIGHT_BROWSERS_PATH at a directory with no browser
+// in it. Fall back to wherever Chromium actually is installed, rather than
+// failing after the build with "executable doesn't exist".
+function hasChromium(dir) {
+  try {
+    return globSync(`${dir}/**/chrome-headless-shell*`).length > 0;
+  } catch {
+    return false;
+  }
+}
+
+const pinned = process.env.PLAYWRIGHT_BROWSERS_PATH;
+const caches = [
+  join(homedir(), "Library/Caches/ms-playwright"),
+  join(homedir(), ".cache", "ms-playwright"),
+];
+const installed = caches.find((dir) => existsSync(dir) && hasChromium(dir));
+if (pinned && !hasChromium(pinned) && installed) {
+  process.env.PLAYWRIGHT_BROWSERS_PATH = installed;
+}
+const { chromium } = await import("playwright");
+
+// A previous run can leave the ports busy. Take the next free one instead of
+// dying with EADDRINUSE; the app and the mock stay paired through `env`.
+function freePort(preferred) {
+  return new Promise((resolve) => {
+    const probe = createServer();
+    probe.once("error", () => {
+      const fallback = createServer();
+      fallback.listen(0, () => {
+        const { port } = fallback.address();
+        fallback.close(() => resolve(port));
+      });
+    });
+    probe.listen(preferred, () => probe.close(() => resolve(preferred)));
+  });
+}
+
+const APP_PORT = await freePort(Number(process.env.E2E_APP_PORT ?? 3100));
+const MOCK_PORT = await freePort(Number(process.env.E2E_MOCK_PORT ?? 54321));
+const APP = `http://localhost:${APP_PORT}`;
+const MOCK = `http://localhost:${MOCK_PORT}`;
 // Each run creates its own accounts in the local mock Supabase.
 const PASSWORD = randomUUID();
 
 const mockEnv = Object.fromEntries(
-  execFileSync("node", ["scripts/mock-supabase.mjs", "--print-env"], { cwd: root, encoding: "utf8" })
+  execFileSync("node", ["scripts/mock-supabase.mjs", "--print-env"], {
+    cwd: root,
+    encoding: "utf8",
+    env: { ...process.env, MOCK_SUPABASE_PORT: String(MOCK_PORT) },
+  })
     .trim()
     .split("\n")
     .map((line) => line.split(/=(.*)/s).slice(0, 2)),
 );
-const env = { ...process.env, ...mockEnv, NEXT_TELEMETRY_DISABLED: "1", MOCK_APP_URL: APP };
+const env = {
+  ...process.env,
+  ...mockEnv,
+  NEXT_TELEMETRY_DISABLED: "1",
+  NEXT_DIST_DIR: ".next-e2e",
+  MOCK_APP_URL: APP,
+  MOCK_SUPABASE_PORT: String(MOCK_PORT),
+};
 
 /* ── processes ─────────────────────────────────────────────────── */
 
@@ -642,7 +696,7 @@ async function main() {
     console.log("Building the app against it (a minute or two)…");
     execFileSync("npx", ["next", "build"], { cwd: root, env, stdio: "ignore" });
   }
-  await start(process.execPath, ["node_modules/next/dist/bin/next", "start", "-H", "127.0.0.1", "-p", "3100"], "Ready");
+  await start(process.execPath, ["node_modules/next/dist/bin/next", "start", "-H", "127.0.0.1", "-p", String(APP_PORT)], "Ready");
   const browser = await chromium.launch();
   const laptop = await browser.newContext(); // one browser profile, shared by A and B
   const phone = await browser.newContext(); // a second device for A

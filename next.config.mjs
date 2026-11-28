@@ -1,5 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // The e2e harness builds into its own directory so it never fights the dev
+  // server over `.next`.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
+  allowedDevOrigins: ["*.vercel.run"],
   images: {
     // Use the patched image stack and keep WebP as the only generated format.
     formats: ["image/webp"],
